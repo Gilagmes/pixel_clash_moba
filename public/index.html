@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Pixel Clash Arena</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo">PIXEL CLASH</div>
+    <div class="coins">🪙 <span id="coins">1000</span></div>
+  </header>
+  <main>
+    <section id="menu" class="panel">
+      <h1>PIXEL CLASH ARENA</h1>
+      <p class="muted">Пиксельная MOBA • Telegram Mini App</p>
+      <div class="modes">
+        <button class="mode active" data-mode="3v3">⚔️ 3 × 3<small>6 игроков</small></button>
+        <button class="mode" data-mode="5v5">🔥 5 × 5<small>10 игроков</small></button>
+      </div>
+      <button id="play" class="primary">ИГРАТЬ</button>
+      <div class="features">🏰 3 линии · 🌲 лес · ⚔️ герои · 🏆 рейтинг</div>
+    </section>
+    <section id="game" class="hidden">
+      <div class="hud">
+        <span id="modeLabel">3 × 3</span>
+        <span id="status">Подключение...</span>
+      </div>
+      <canvas id="arena" width="1000" height="900"></canvas>
+      <div class="controls">
+        <div class="pad">
+          <button data-key="up">▲</button>
+          <div><button data-key="left">◀</button><button data-key="down">▼</button><button data-key="right">▶</button></div>
+        </div>
+        <button id="skill" class="skill">Q</button>
+      </div>
+    </section>
+  </main>
+</div>
+<script src="/game.js"></script>
+</body>
+</html>
