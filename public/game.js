@@ -4,11 +4,27 @@ const canvas = document.getElementById("arena");
 const ctx = canvas.getContext("2d");
 const statusEl = document.getElementById("status");
 const modeLabel = document.getElementById("modeLabel");
+const tg = window.Telegram?.WebApp;
 
 let mode = "3v3";
 let ws = null;
 let me = null;
 let players = [];
+let reconnectTimer = null;
+const pressed = new Set();
+
+if (tg) {
+  tg.ready();
+  tg.expand();
+  tg.disableVerticalSwipes?.();
+  document.getElementById("coins").textContent = "1000";
+}
+
+function playerName() {
+  const user = tg?.initDataUnsafe?.user;
+  if (!user) return "Player";
+  return (user.first_name || user.username || "Player").slice(0, 18);
+}
 
 function setMode(nextMode) {
   mode = nextMode;
@@ -29,19 +45,21 @@ document.getElementById("play").addEventListener("click", () => {
 });
 
 function connect() {
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
   const proto = location.protocol === "https:" ? "wss" : "ws";
+  statusEl.textContent = "Подключение...";
   ws = new WebSocket(`${proto}://${location.host}`);
 
   ws.onopen = () => {
     statusEl.textContent = "Поиск игроков...";
-    ws.send(JSON.stringify({ type: "join", mode, name: "Player" }));
+    ws.send(JSON.stringify({ type: "join", mode, name: playerName() }));
   };
 
   ws.onmessage = (event) => {
     try {
       const message = JSON.parse(event.data);
       if (message.type !== "state") return;
-      players = message.players || [];
+      players = Array.isArray(message.players) ? message.players : [];
       if (me) me = players.find((p) => p.id === me.id) || null;
       if (!me) me = players[players.length - 1] || null;
       statusEl.textContent = `Игроков: ${players.length}/${mode === "5v5" ? 10 : 6}`;
@@ -56,7 +74,12 @@ function connect() {
   };
 
   ws.onclose = () => {
-    statusEl.textContent = "Соединение потеряно";
+    ws = null;
+    if (!game.classList.contains("hidden")) {
+      statusEl.textContent = "Переподключение...";
+      clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(connect, 1500);
+    }
   };
 }
 
@@ -65,26 +88,56 @@ function move(dx, dy) {
   ws.send(JSON.stringify({ type: "move", x: me.x + dx, y: me.y + dy }));
 }
 
+const directions = {
+  up: [0, -45], down: [0, 45], left: [-45, 0], right: [45, 0]
+};
+
+function press(key) {
+  if (pressed.has(key)) return;
+  pressed.add(key);
+  move(...directions[key]);
+}
+
+function release(key) {
+  pressed.delete(key);
+}
+
 document.querySelectorAll("[data-key]").forEach((button) => {
-  button.addEventListener("click", () => {
-    const directions = {
-      up: [0, -45],
-      down: [0, 45],
-      left: [-45, 0],
-      right: [45, 0]
-    };
-    move(...directions[button.dataset.key]);
+  const key = button.dataset.key;
+  button.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    button.setPointerCapture?.(event.pointerId);
+    press(key);
   });
+  button.addEventListener("pointerup", () => release(key));
+  button.addEventListener("pointercancel", () => release(key));
 });
 
-document.getElementById("skill").addEventListener("click", () => {
-  statusEl.textContent = "Способность активирована!";
+document.addEventListener("keydown", (event) => {
+  const map = { ArrowUp: "up", w: "up", ArrowDown: "down", s: "down", ArrowLeft: "left", a: "left", ArrowRight: "right", d: "right" };
+  const key = map[event.key];
+  if (key) {
+    event.preventDefault();
+    press(key);
+  }
+  if (event.key.toLowerCase() === "q") useSkill();
+});
+
+document.addEventListener("keyup", (event) => {
+  const map = { ArrowUp: "up", w: "up", ArrowDown: "down", s: "down", ArrowLeft: "left", a: "left", ArrowRight: "right", d: "right" };
+  if (map[event.key]) release(map[event.key]);
+});
+
+function useSkill() {
+  statusEl.textContent = "⚡ Способность активирована!";
   setTimeout(() => {
-    if (ws && ws.readyState === WebSocket.OPEN) {
+    if (ws?.readyState === WebSocket.OPEN) {
       statusEl.textContent = `Игроков: ${players.length}/${mode === "5v5" ? 10 : 6}`;
     }
   }, 900);
-});
+}
+
+document.getElementById("skill").addEventListener("click", useSkill);
 
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
