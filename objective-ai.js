@@ -1,8 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-// Objective AI layer: runs before server-launcher.js and augments the bot source
-// without touching the heavily compressed original bots.js.
+// Objective AI layer: augments the compressed bots.js at runtime.
 const originalRead = fs.readFileSync;
 const botsPath = path.resolve(__dirname, 'bots.js');
 fs.readFileSync = function(file, encoding) {
@@ -35,6 +34,21 @@ function objectiveAlliesNear(room,b,camp,radius){
   if(!camp)return 0;
   return room.players.filter(p=>p.alive&&p.team===b.team&&p.id!==b.id&&dist(p,camp)<radius).length;
 }
+function pushLane(room,b){
+  const lanes=[180,450,720];
+  let best=lanes[0],bestScore=-Infinity;
+  for(const lane of lanes){
+    const towers=room.towers.filter(t=>t.alive&&t.team!==b.team&&t.laneY===lane);
+    const towerHp=towers.reduce((s,t)=>s+t.hp/Math.max(1,t.maxHp||t.hp),0);
+    const allied=room.minions.filter(m=>m.hp>0&&m.team===b.team&&m.laneY===lane).length;
+    const enemy=room.minions.filter(m=>m.hp>0&&m.team!==b.team&&m.laneY===lane).length;
+    const allies=room.players.filter(p=>p.alive&&p.team===b.team&&p.id!==b.id&&Math.abs(p.y-lane)<150).length;
+    const enemyHeroes=room.players.filter(p=>p.alive&&p.team!==b.team&&Math.abs(p.y-lane)<150).length;
+    const score=(towers.length?2.5-towerHp:0)+allied*7-enemy*3+allies*20-enemyHeroes*9;
+    if(score>bestScore){bestScore=score;best=lane;}
+  }
+  return best;
+}
 `;
   if (!code.includes('function objectiveCamp(')) code = code.replace('const LANES=', inject+'const LANES=');
 
@@ -46,6 +60,18 @@ function objectiveAlliesNear(room,b,camp,radius){
   code = code.replace(
     'const wantsJungle=!target&&!danger&&camp&&now>=b.botJungleAt&&(b.gold<900||b.hp>b.maxHp*.65);',
     'const wantsJungle=!!(camp&&now>=b.botJungleAt&&b.hp>b.maxHp*.58&&!objectiveContest&&(!target||(!danger&&camp.buff!=="blue")||camp.buff==="dragon"));'
+  );
+
+  // Team push coordination: bots periodically converge on the same vulnerable lane.
+  code = code.replace(
+    'const lane=b.botLane||LANES[0],dir=b.team===1?1:-1;',
+    'const coordinatedLane=pushLane(room,b);const lane=(now>=b.botLaneAt-1200&&room.players.filter(p=>p.alive&&p.team===b.team&&p.isBot&&Math.abs((p.botLane||LANES[0])-coordinatedLane)<1).length>=1)?coordinatedLane:(b.botLane||LANES[0]),dir=b.team===1?1:-1;'
+  );
+
+  // If two or more allies are already near the selected lane, bots become more willing to push it.
+  code = code.replace(
+    'const grouped=allies.filter(a=>dist(a,b)<300).length>=1;',
+    'const grouped=allies.filter(a=>dist(a,b)<300).length>=1;const pushGroup=room.players.filter(p=>p.alive&&p.team===b.team&&Math.abs(p.y-lane)<140).length>=2;'
   );
 
   return code;
