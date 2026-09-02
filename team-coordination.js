@@ -1,14 +1,14 @@
 const fs = require('fs');
 const path = require('path');
 
-// Team Coordination 3.0: install a lightweight commander layer before objective-ai.
+// Team Coordination 3.1: shared objective assignments + role-specific team tasks.
 const originalRead = fs.readFileSync;
 const botsPath = path.resolve(__dirname, 'bots.js');
 
 function installTeamDirector(code) {
-  if (typeof code !== 'string' || code.includes('PixelTeamDirector30')) return code;
+  if (typeof code !== 'string' || code.includes('PixelTeamDirector31')) return code;
   const inject = `
-/* PixelTeamDirector30 */
+/* PixelTeamDirector31 */
 function pixelTeamObjective(room,team,now){
   const camps=(room.jungle||[]).filter(j=>j.alive);
   if(!camps.length)return null;
@@ -57,6 +57,29 @@ function pixelTeamLane(room,team){
   }
   return best;
 }
+function pixelAssignTask(b,mode,focus,objective,threat){
+  if(mode==='DEFEND'){
+    b.botTeamTask=b.hero==='warrior'?'PEEL':b.hero==='mage'?'CONTROL':'INTERCEPT';
+    return;
+  }
+  if(mode==='OBJECTIVE'){
+    b.botTeamTask=b.hero==='warrior'?'SECURE':b.hero==='mage'?'GUARD':'FLANK';
+    return;
+  }
+  if(mode==='FINISH'){
+    b.botTeamTask=b.hero==='warrior'?'FRONT':b.hero==='mage'?'SIEGE':'EXECUTE';
+    return;
+  }
+  if(mode==='FIGHT'){
+    b.botTeamTask=b.hero==='warrior'?'INITIATE':b.hero==='mage'?'BACKLINE':'FLANK';
+    return;
+  }
+  if(mode==='REGROUP'){
+    b.botTeamTask=b.hero==='warrior'?'ANCHOR':b.hero==='mage'?'COVER':'SCOUT';
+    return;
+  }
+  b.botTeamTask=b.hero==='warrior'?'FRONT':b.hero==='mage'?'POKE':'FLANK';
+}
 function pixelTeamDirector(room){
   if(!room||room.finished)return;
   const now=Date.now();
@@ -70,7 +93,6 @@ function pixelTeamDirector(room){
     const lane=pixelTeamLane(room,team);
     const alive=bots.length;
     const enemyCount=enemies.length;
-    const ownBase=room.bases?.find(x=>x.team===team);
     const enemyBase=room.bases?.find(x=>x.team!==team);
     const enemyTowers=room.towers.filter(t=>t.alive&&t.team!==team).length;
     const late=!!(enemyBase&&(enemyTowers===0||enemyBase.hp<(enemyBase.maxHp||enemyBase.hp)*.35));
@@ -88,28 +110,34 @@ function pixelTeamDirector(room){
     for(const b of bots){
       b.botTeamMode=mode;
       b.botCaptainId=captain.id;
+      pixelAssignTask(b,mode,focus,objective,threat);
       if(mode==='DEFEND'&&threat){b.botFocusId=threat.id; b.botLane=threat.laneY||b.botLane; continue;}
       if(mode==='OBJECTIVE'&&objective){
         b.botFocusId=null;
         b.botLane=objective.y||b.botLane;
+        b.botObjectiveId=objective.id||null;
         b.botJungleAt=Math.min(b.botJungleAt||now,now+250);
         continue;
       }
       if(mode==='FINISH'&&enemyBase){
         b.botFocusId=focus?.id||null;
         b.botLane=enemyBase.y||b.botLane;
+        b.botObjectiveId=null;
         continue;
       }
       if(mode==='FIGHT'&&focus){
         b.botFocusId=focus.id;
         b.botLane=Math.abs(focus.y-b.y)<190?focus.y:lane;
+        b.botObjectiveId=null;
         continue;
       }
       if(mode==='REGROUP'){
         b.botFocusId=null;
+        b.botObjectiveId=null;
         b.botLane=lane;
         continue;
       }
+      b.botObjectiveId=null;
       b.botLane=lane;
       if(b.hero==='assassin'&&focus&&focus.hp<focus.maxHp*.45)b.botFocusId=focus.id;
       else if(b.hero!=='assassin'&&focus)b.botFocusId=focus.id;
