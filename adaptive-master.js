@@ -22,7 +22,7 @@ function pixelAdaptivePick(room,b){
     const ah=a.hp/Math.max(1,a.maxHp), ch=c.hp/Math.max(1,c.maxHp);
     const ad=dist(b,a), cd=dist(b,c);
     const aa=room.players.filter(p=>p.alive&&p.team===b.team&&dist(p,a)<260).length;
-    const ca=room.players.filter(p=>p.alive&&p.team===b.team&&dist(p,c)<260).length;
+    const ca=room.players.filter(p=>p.alive&&p.team===c.team&&dist(p,c)<260).length;
     let as=aa*65-ah*120-ad*.08;
     let cs=ca*65-ch*120-cd*.08;
     if(a.hero==='mage')as+=30;
@@ -54,7 +54,7 @@ function pixelAdaptivePlan(room,b){
   return {target,enemies,allies,hp,threatened,teamReady};
 }
 
-const __pixelAdaptiveOriginalUseSkill = useSkill;
+const __pixelAdaptiveOriginalUseSkill140 = useSkill;
 useSkill = function(room,b,skill,target){
   try{
     if(room&&b&&b.alive){
@@ -73,10 +73,10 @@ useSkill = function(room,b,skill,target){
       }
     }
   }catch(e){}
-  return __pixelAdaptiveOriginalUseSkill(room,b,skill,target);
+  return __pixelAdaptiveOriginalUseSkill140(room,b,skill,target);
 };
 
-const __pixelAdaptiveOriginalTickBots = tickBots;
+const __pixelAdaptiveOriginalTickBots140 = tickBots;
 tickBots = function(...args){
   const room=args[0];
   try{
@@ -84,7 +84,7 @@ tickBots = function(...args){
       for(const b of room.players.filter(p=>p.isBot&&p.alive))pixelAdaptivePlan(room,b);
     }
   }catch(e){}
-  return __pixelAdaptiveOriginalTickBots.apply(this,args);
+  return __pixelAdaptiveOriginalTickBots140.apply(this,args);
 };
 `;
   return code+inject;
