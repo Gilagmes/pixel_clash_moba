@@ -36,6 +36,8 @@ botCode=botCode.replace('if(!b.alive){', 'botStatusEnsure(b);if(b.level>=3&&!b.s
 botCode=botCode.replace('if(key==="e"){const dir=', 'if(key==="e"){if(b.hero==="assassin")botStatus(b,"stealth",700);const dir=');
 botCode=botCode.replace('return damage(room,b,target,value)}', 'const did=damage(room,b,target,value);if(b.hero==="warrior"&&key==="q")botStatus(target,"stun",850);if(b.hero==="warrior"&&key==="e")botStatus(target,"slow",1000,.55);if(b.hero==="warrior"&&key==="r"){botStatus(target,"stun",650);botStatus(target,"slow",1400,.45)}if(b.hero==="mage"&&key==="q")botStatus(target,"slow",1800,.5);if(b.hero==="mage"&&key==="r")botStatus(target,"slow",2500,.38);if(b.hero==="warrior"&&key==="w")botStatus(b,"shield",3500,45+b.maxHp*.12);if(b.hero==="assassin"&&key==="w")botStatus(b,"stealth",2800);return did}');
 botCode=botCode.replace('let final=roleDamage(a,t,amount);', 'botStatusEnsure(t);if(t.statuses&&t.statuses.shield>0){const absorbed=Math.min(t.statuses.shield,Math.max(0,amount));t.statuses.shield-=absorbed;amount-=absorbed;if(amount<=0)return false}let final=roleDamage(a,t,amount);');
+// Objective ownership fix: bot kills must identify the winning team for the server-side team buff.
+botCode=botCode.replace('camp.alive=false;camp.respawnAt=', 'camp.alive=false;camp.lastKillerTeam=b.team;camp.respawnAt=');
 mod._compile(botCode,filename)};
 const mod=new Module(target,module.parent);mod.filename=target;mod.paths=Module._nodeModulePaths(__dirname);mod._compile(code,target);
 Module._extensions['.js']=originalJs;
