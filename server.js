@@ -21,7 +21,7 @@ const rooms = new Map();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 app.use(express.static(PUBLIC_DIR));
-app.get("/health", (_req, res) => res.json({ ok: true, game: "Pixel Clash", version: "2.0.0" }));
+app.get("/health", (_req, res) => res.json({ ok: true, game: "Pixel Clash", version: "2.1.0" }));
 app.get("/", (_req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
 
 wss.on("connection", (ws) => {
@@ -32,10 +32,10 @@ wss.on("connection", (ws) => {
     if (msg.type === "join") {
       const mode = msg.mode === "5v5" ? "5v5" : "3v3";
       const maxPlayers = mode === "5v5" ? 10 : 6;
-      let room = [...rooms.values()].find(r => r.mode === mode && r.players.length < r.maxPlayers);
+      let room = [...rooms.values()].find(r => r.mode === mode && !r.finished && r.players.length < r.maxPlayers);
       if (!room) {
         const id = Math.random().toString(36).slice(2, 9);
-        room = { id, mode, maxPlayers, players: [], minions: [], towers: createTowers(), bases: createBases(), nextMinion: Date.now() + 2500 };
+        room = { id, mode, maxPlayers, players: [], minions: [], towers: createTowers(), bases: createBases(), nextMinion: Date.now() + 2500, finished: false, winner: null };
         rooms.set(id, room);
       }
       const index = room.players.length;
@@ -43,17 +43,14 @@ wss.on("connection", (ws) => {
       const heroKey = HEROES[msg.hero] ? msg.hero : "warrior";
       const hero = HEROES[heroKey];
       const player = {
-        id: Math.random().toString(36).slice(2, 9),
-        name: String(msg.name || "Player").slice(0, 18),
-        hero: heroKey, heroName: hero.name, team,
-        x: team === 1 ? 115 : 885, y: LANES[index % 3],
-        hp: hero.maxHp, maxHp: hero.maxHp, alive: true, respawnAt: 0
+        id: Math.random().toString(36).slice(2, 9), name: String(msg.name || "Player").slice(0, 18),
+        hero: heroKey, heroName: hero.name, team, x: team === 1 ? 115 : 885, y: LANES[index % 3],
+        hp: hero.maxHp, maxHp: hero.maxHp, alive: true, respawnAt: 0, gold: 500, kills: 0, deaths: 0
       };
-      room.players.push(player); ws.roomId = room.id; ws.player = player;
-      broadcastState(room); return;
+      room.players.push(player); ws.roomId = room.id; ws.player = player; broadcastState(room); return;
     }
     if (!ws.roomId || !ws.player) return;
-    const room = rooms.get(ws.roomId); if (!room) return;
+    const room = rooms.get(ws.roomId); if (!room || room.finished) return;
     if (msg.type === "move" && ws.player.alive) {
       const x = Number(msg.x), y = Number(msg.y);
       if (Number.isFinite(x)) ws.player.x = clamp(x, 80, 920);
@@ -73,9 +70,12 @@ wss.on("connection", (ws) => {
         if (dist(ws.player, target) <= heroStat(ws.player, "skillRange")) { applyDamage(room, target, heroStat(ws.player, "skillDamage"), ws.player); hits++; }
       }
       for (const minion of room.minions) {
-        if (minion.team !== ws.player.team && minion.hp > 0 && dist(ws.player, minion) <= heroStat(ws.player, "skillRange")) { minion.hp -= heroStat(ws.player, "skillDamage"); hits++; }
+        if (minion.team !== ws.player.team && minion.hp > 0 && dist(ws.player, minion) <= heroStat(ws.player, "skillRange")) { applyDamage(room, minion, heroStat(ws.player, "skillDamage"), ws.player); hits++; }
       }
-      broadcast(room, { type: "combat", action: "skill", by: ws.player.id, hits }); broadcastState(room); return;
+      for (const tower of room.towers) {
+        if (tower.alive && tower.team !== ws.player.team && dist(ws.player, { x: tower.x, y: tower.laneY }) <= heroStat(ws.player, "skillRange")) { tower.hp = Math.max(0, tower.hp - heroStat(ws.player, "skillDamage")); if (tower.hp === 0) rewardTower(room, tower, ws.player); hits++; }
+      }
+      broadcast(room, { type: "combat", action: "skill", by: ws.player.id, hits }); checkVictory(room); broadcastState(room); return;
     }
   });
   ws.on("close", () => {
@@ -88,8 +88,8 @@ wss.on("connection", (ws) => {
 function createTowers() {
   const towers = [];
   for (const team of [1, 2]) for (const laneY of LANES) {
-    towers.push({ id: `t-${team}-${laneY}-1`, team, laneY, x: team === 1 ? 245 : 755, hp: 180, maxHp: 180, tier: 1, alive: true });
-    towers.push({ id: `t-${team}-${laneY}-2`, team, laneY, x: team === 1 ? 390 : 610, hp: 220, maxHp: 220, tier: 2, alive: true });
+    towers.push({ id: `t-${team}-${laneY}-1`, team, laneY, x: team === 1 ? 245 : 755, hp: 180, maxHp: 180, tier: 1, alive: true, lastShot: 0 });
+    towers.push({ id: `t-${team}-${laneY}-2`, team, laneY, x: team === 1 ? 390 : 610, hp: 220, maxHp: 220, tier: 2, alive: true, lastShot: 0 });
   }
   return towers;
 }
@@ -101,21 +101,36 @@ function damageNearest(room, attacker, range, damage) {
   let target = null, best = Infinity;
   for (const p of room.players) if (p.alive && p.team !== attacker.team && dist(attacker, p) <= range && dist(attacker, p) < best) { target = p; best = dist(attacker, p); }
   if (!target) for (const m of room.minions) if (m.hp > 0 && m.team !== attacker.team && dist(attacker, m) <= range && dist(attacker, m) < best) { target = m; best = dist(attacker, m); }
-  if (target) applyDamage(room, target, damage, attacker);
+  if (!target) for (const t of room.towers) if (t.alive && t.team !== attacker.team && dist(attacker, {x:t.x,y:t.laneY}) <= range && dist(attacker, {x:t.x,y:t.laneY}) < best) { target = t; best = dist(attacker, {x:t.x,y:t.laneY}); }
+  if (target) {
+    if (target.id?.startsWith("m-")) applyDamage(room, target, damage, attacker);
+    else if (target.id?.startsWith("t-")) { target.hp = Math.max(0, target.hp - damage); if (target.hp === 0) rewardTower(room, target, attacker); checkVictory(room); }
+    else applyDamage(room, target, damage, attacker);
+  }
 }
 function applyDamage(room, target, damage, attacker) {
   target.hp = Math.max(0, target.hp - damage);
-  if (target.hp > 0) return;
-  if (target.alive === false) return;
+  if (target.hp > 0 || target.alive === false) return;
   target.alive = false;
-  if (target.id && target.id.startsWith("m-")) return;
+  if (target.id && target.id.startsWith("m-")) { if (attacker?.gold != null) attacker.gold += 15; return; }
+  target.deaths = (target.deaths || 0) + 1;
+  if (attacker?.id && attacker.id !== target.id) { attacker.kills = (attacker.kills || 0) + 1; attacker.gold = (attacker.gold || 0) + 100; }
   target.respawnAt = Date.now() + 5000;
+}
+function rewardTower(room, tower, attacker) {
+  tower.alive = false; tower.hp = 0;
+  for (const p of room.players) if (p.team === attacker.team) p.gold = (p.gold || 0) + 75;
 }
 function spawnMinions(room) {
   for (const team of [1, 2]) for (let i = 0; i < 3; i++) {
     const laneY = LANES[i];
-    room.minions.push({ id: `m-${Math.random().toString(36).slice(2, 8)}`, team, laneY, x: team === 1 ? 125 : 875, y: laneY, hp: 45, maxHp: 45, speed: 18 });
+    room.minions.push({ id: `m-${Math.random().toString(36).slice(2, 8)}`, team, laneY, x: team === 1 ? 125 : 875, y: laneY, hp: 45, maxHp: 45, speed: 18, lastAttack: 0 });
   }
+}
+function nearestEnemy(room, source, range, predicate = () => true) {
+  let target = null, best = Infinity;
+  for (const p of room.players) if (p.alive && p.team !== source.team && predicate(p) && dist(source, p) <= range && dist(source, p) < best) { target = p; best = dist(source, p); }
+  return target;
 }
 function tickRoom(room) {
   const now = Date.now();
@@ -125,17 +140,42 @@ function tickRoom(room) {
   }
   for (const m of room.minions) {
     if (m.hp <= 0) continue;
-    const dir = m.team === 1 ? 1 : -1; m.x += dir * (m.speed / 10);
-    for (const enemy of room.players) if (enemy.alive && enemy.team !== m.team && dist(m, enemy) < 28) applyDamage(room, enemy, 4, m);
-    for (const tower of room.towers) if (tower.alive && tower.team !== m.team && Math.abs(tower.x - m.x) < 18 && Math.abs(tower.laneY - m.y) < 18) { tower.hp = Math.max(0, tower.hp - 5); if (!tower.hp) tower.alive = false; }
-    for (const base of room.bases) if (base.team !== m.team && Math.abs(base.x - m.x) < 22 && Math.abs(base.y - m.y) < 55) base.hp = Math.max(0, base.hp - 2);
+    const dir = m.team === 1 ? 1 : -1;
+    const enemyHero = nearestEnemy(room, m, 34);
+    const enemyMinion = room.minions.find(e => e.hp > 0 && e.team !== m.team && e.laneY === m.laneY && Math.abs(e.x - m.x) < 32);
+    if (enemyHero || enemyMinion) {
+      if (now - m.lastAttack >= 900) {
+        m.lastAttack = now;
+        if (enemyHero) applyDamage(room, enemyHero, 4, m);
+        else applyDamage(room, enemyMinion, 6, m);
+      }
+    } else {
+      m.x += dir * (m.speed / 10);
+      const tower = room.towers.find(t => t.alive && t.team !== m.team && t.laneY === m.laneY && Math.abs(t.x - m.x) < 18);
+      if (tower && now - (m.lastAttack || 0) >= 900) { m.lastAttack = now; tower.hp = Math.max(0, tower.hp - 5); if (tower.hp === 0) rewardTower(room, tower, m); }
+      const base = room.bases.find(b => b.team !== m.team && Math.abs(b.x - m.x) < 22 && Math.abs(b.y - m.y) < 55);
+      if (base) base.hp = Math.max(0, base.hp - 2);
+    }
+  }
+  for (const tower of room.towers) {
+    if (!tower.alive || now - tower.lastShot < 1100) continue;
+    const target = nearestEnemy(room, {team:tower.team,x:tower.x,y:tower.laneY}, 155, p => Math.abs(p.y - tower.laneY) < 48);
+    if (target) { tower.lastShot = now; applyDamage(room, target, 10, tower); }
   }
   room.minions = room.minions.filter(m => m.hp > 0 && m.x > 55 && m.x < 945);
+  checkVictory(room);
 }
-const tick = setInterval(() => { for (const room of rooms.values()) { tickRoom(room); broadcastState(room); } }, 100);
+function checkVictory(room) {
+  if (room.finished) return;
+  const destroyed = room.bases.find(b => b.hp <= 0);
+  if (!destroyed) return;
+  room.finished = true; room.winner = destroyed.team === 1 ? 2 : 1;
+  broadcast(room, { type: "victory", winner: room.winner });
+}
+const tick = setInterval(() => { for (const room of rooms.values()) { if (!room.finished) { tickRoom(room); broadcastState(room); } } }, 100);
 const heartbeat = setInterval(() => wss.clients.forEach(ws => { if (ws.isAlive === false) return ws.terminate(); ws.isAlive = false; ws.ping(); }), 30000);
 wss.on("close", () => { clearInterval(heartbeat); clearInterval(tick); });
-function broadcastState(room) { broadcast(room, { type: "state", mode: room.mode, players: room.players, minions: room.minions, towers: room.towers, bases: room.bases, lanes: LANES }); }
+function broadcastState(room) { broadcast(room, { type: "state", mode: room.mode, players: room.players, minions: room.minions, towers: room.towers, bases: room.bases, lanes: LANES, finished: room.finished, winner: room.winner }); }
 function broadcast(room, data) { const text = JSON.stringify(data); wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN && c.roomId === room.id) c.send(text); }); }
 app.use((_req, res) => res.status(404).send("Not Found"));
 server.listen(PORT, "0.0.0.0", () => console.log(`Pixel Clash server listening on ${PORT}`));
