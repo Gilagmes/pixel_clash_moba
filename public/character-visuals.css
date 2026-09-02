@@ -1,1 +1,1 @@
-.character-visuals-layer{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:8;image-rendering:auto}.game-wrap{isolation:isolate}.character-visuals-layer{filter:saturate(1.08) contrast(1.04)}
+.character-visuals-layer{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:18;image-rendering:auto;display:block}.game-wrap{isolation:isolate;position:relative}.character-visuals-layer{filter:saturate(1.12) contrast(1.08);mix-blend-mode:normal}
