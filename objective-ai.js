@@ -165,10 +165,6 @@ function endgameState(room,b){
     'if(recovery.nearbyEnemies>0&&b.hero==="warrior"&&danger&&dist(b,danger)<220&&!recovery.retreat){'
   );
   code = code.replace(
-    'if(teamReady&&dist(b,target)>125){b.x+=(target.x-b.x)*.07;b.y+=(target.y-b.y)*.055}',
-    'if(teamReady&&dist(b,target)>125){b.x+=(target.x-b.x)*.07;b.y+=(target.y-b.y)*.055}'
-  );
-  code = code.replace(
     'const tower=siegeTower(room,b,lane);',
     'const tower=siegeTower(room,b,lane);'
   );
