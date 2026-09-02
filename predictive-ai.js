@@ -58,15 +58,10 @@ function pixelPredictApply(room,b){
   b.botPredictY=Math.round(point.y);
   b.botPredictTargetId=e.id;
   b.botPredictAt=Date.now();
-
-  // Pre-position by the predicted escape lane rather than the enemy's current lane.
   if(distance>150&&distance<430){
     const lane=pixelPredictLane(point.y);
     if(Math.abs(point.y-(b.botLane||lane))>70)b.botLane=lane;
   }
-
-  // Intercept fleeing enemies: keep the shared focus, but bias the lane toward where
-  // the target is going. This does not mutate the real enemy position.
   const fleeing=(pick.m.vx||0)*(e.team===1?1:-1)<-35 || Math.abs(pick.m.vy||0)>75;
   if(fleeing&&distance<360)b.botFocusId=e.id;
 }
@@ -91,4 +86,4 @@ fs.readFileSync = function(file, encoding) {
   return installPredictiveAI(out);
 };
 
-require('./adaptive-counter.js');
+require('./formation-ai.js');
