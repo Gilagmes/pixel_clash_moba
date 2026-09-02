@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "scripts": {
-    "start": "node team-memory.js"
+    "start": "node adaptive-counter.js"
   },
   "dependencies": {
     "express": "^5.1.0",
