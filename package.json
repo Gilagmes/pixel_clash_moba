@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "scripts": {
-    "start": "node teamfight-director.js"
+    "start": "node combat-orchestrator.js"
   },
   "dependencies": {
     "express": "^5.1.0",
