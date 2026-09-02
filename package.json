@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "scripts": {
-    "start": "node battle-director.js"
+    "start": "node team-commander.js"
   },
   "dependencies": {
     "express": "^5.1.0",
