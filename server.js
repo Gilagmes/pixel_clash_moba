@@ -15,7 +15,7 @@ app.use(express.json({ limit: "256kb" }));
 app.use(express.static(PUBLIC_DIR));
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, game: "Pixel Clash", version: "1.0.0" });
+  res.json({ ok: true, game: "Pixel Clash", version: "1.1.0" });
 });
 
 app.get("/", (_req, res) => {
@@ -27,6 +27,9 @@ const rooms = new Map();
 wss.on("connection", (ws) => {
   ws.roomId = null;
   ws.player = null;
+  ws.isAlive = true;
+
+  ws.on("pong", () => { ws.isAlive = true; });
 
   ws.on("message", (raw) => {
     let msg;
@@ -86,6 +89,16 @@ wss.on("connection", (ws) => {
     else broadcast(room, { type: "state", mode: room.mode, players: room.players });
   });
 });
+
+const heartbeat = setInterval(() => {
+  wss.clients.forEach((ws) => {
+    if (ws.isAlive === false) return ws.terminate();
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, 30000);
+
+wss.on("close", () => clearInterval(heartbeat));
 
 function broadcast(room, data) {
   const text = JSON.stringify(data);
