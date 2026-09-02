@@ -10,6 +10,25 @@ fs.readFileSync = function(file, encoding) {
 
   let code = out;
   const inject = `
+function teamFightFocus(room,b,enemies){
+  let best=null,bestScore=-Infinity;
+  for(const e of enemies){
+    if(!e.alive||dist(b,e)>430)continue;
+    const allies=room.players.filter(p=>p.alive&&p.team===b.team&&dist(p,e)<260).length;
+    const enemyGuard=room.players.filter(p=>p.alive&&p.team!==b.team&&dist(p,e)<180).length;
+    const hp=e.hp/Math.max(1,e.maxHp||e.hp);
+    let score=allies*90-enemyGuard*22+(1-hp)*130;
+    if(e.hero==='mage')score+=35;
+    if(b.hero==='assassin'&&hp<.45)score+=120;
+    if(b.hero==='warrior'&&allies>=2)score+=45;
+    if(score>bestScore){bestScore=score;best=e;}
+  }
+  return best;
+}
+function weakAlly(room,b){
+  return room.players.filter(p=>p.alive&&p.team===b.team&&p.id!==b.id&&p.hp<p.maxHp*.38&&dist(b,p)<300)
+    .sort((a,c)=>a.hp/a.maxHp-c.hp/c.maxHp)[0]||null;
+}
 function objectiveCamp(room,b,now){
   const camps=(room.jungle||[]).filter(j=>j.alive);
   if(!camps.length)return null;
@@ -72,6 +91,20 @@ function pushLane(room,b){
   code = code.replace(
     'const grouped=allies.filter(a=>dist(a,b)<300).length>=1;',
     'const grouped=allies.filter(a=>dist(a,b)<300).length>=1;const pushGroup=room.players.filter(p=>p.alive&&p.team===b.team&&Math.abs(p.y-lane)<140).length>=2;'
+  );
+
+  // Teamfight coordination: refresh a shared focus target and protect a wounded ally.
+  code = code.replace(
+    'const allies=room.players.filter(p=>p.alive&&p.team===b.team&&p.id!==b.id);',
+    'const allies=room.players.filter(p=>p.alive&&p.team===b.team&&p.id!==b.id);const fightTarget=teamFightFocus(room,b,enemies);if(fightTarget)b.botFocusId=fightTarget.id;'
+  );
+  code = code.replace(
+    'const danger=chooseHeroTarget(enemies,b,210);',
+    'const danger=chooseHeroTarget(enemies,b,210);const allyInDanger=weakAlly(room,b);if(allyInDanger&&b.hero!=="assassin"&&danger&&dist(allyInDanger,danger)<210)b.botFocusId=danger.id;'
+  );
+  code = code.replace(
+    'if(b.hero==="warrior"&&threat&&dist(b,threat)>150)target=threat;',
+    'if(b.hero==="warrior"&&threat&&dist(b,threat)>150)target=threat;const focusedTeam=enemies.find(e=>e.id===b.botFocusId&&e.alive);if(focusedTeam&&room.players.filter(p=>p.alive&&p.team===b.team&&dist(p,focusedTeam)<280).length>=2)target=focusedTeam;'
   );
 
   return code;
