@@ -81,14 +81,22 @@ useSkill=function(room,b,skill,target){
         else if(hp<.28&&b.hero==='assassin'&&pixelAdaptiveReady(b,'q')&&dist(b,target)<=190)skill='q';
       }
     }
-  }catch(e){}
+  }catch(e){
+    console.error('[Pixel18 skill]',e?.stack||e);
+  }
   return __pixel18OriginalSkill(room,b,skill,target);
 };
 const __pixel18OriginalTick = tickBots;
 tickBots=function(...args){
-  const room=args[0];
-  try{if(room&&!room.finished)pixel18Orchestrate(room);}catch(e){}
-  return __pixel18OriginalTick.apply(this,args);
+  try{
+    const room=args[0];
+    if(room&&!room.finished)pixel18Orchestrate(room);
+    return __pixel18OriginalTick.apply(this,args);
+  }catch(e){
+    // Never let an AI-layer exception terminate the WebSocket game server.
+    console.error('[Pixel18 tick]',e?.stack||e);
+    return undefined;
+  }
 };
 `;
   return code+inject;
