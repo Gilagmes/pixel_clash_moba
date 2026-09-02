@@ -117,6 +117,30 @@ function endgameState(room,b){
   const hp=enemyBase?enemyBase.hp/Math.max(1,enemyBase.maxHp||enemyBase.hp):1;
   return {enemyBase,ownBase,towers,allies,enemies,wave,hp,finish:!!(enemyBase&&(hp<.35||towers===0)),ready:!!(enemyBase&&wave>0&&allies>=Math.max(2,enemies))};
 }
+function teamDirector(room,b,allies,enemies,lane,endgame){
+  const aliveAllies=allies.filter(a=>a.alive);
+  const aliveEnemies=enemies.filter(e=>e.alive);
+  const teamCount=aliveAllies.length+1;
+  const enemyCount=aliveEnemies.length;
+  const hp=b.hp/Math.max(1,b.maxHp||b.hp);
+  const lead=teamCount-enemyCount;
+  const objective=objectiveCamp(room,b,Date.now());
+  const tower=siegeTower(room,b,lane);
+  const wave=tower?alliedWaveAt(room,b,tower):0;
+  let phase='mid';
+  if(endgame?.finish||(!endgame?.enemyBase&&teamCount<=1)) phase='late';
+  else if(teamCount>=enemyCount+2||lead>=2) phase='lead';
+  else if(enemyCount>=teamCount+2||lead<=-2) phase='comeback';
+  else if(!objective) phase='push';
+  let job='group';
+  if(b.hero==='warrior')job=lead>=0?'initiate':'protect';
+  else if(b.hero==='mage')job=lead>=0?'poke':'peel';
+  else if(b.hero==='assassin')job=lead>=0?'flank':'farm';
+  if(phase==='late'&&endgame?.ready)job='finish';
+  if(phase==='comeback')job=b.hero==='warrior'?'protect':b.hero==='assassin'?'farm':'peel';
+  if(phase==='lead'&&wave>0&&b.hero!=='assassin')job='siege';
+  return {phase,job,teamCount,enemyCount,lead,hp,objective,tower,wave};
+}
 `;
   if (!code.includes('function objectiveCamp(')) code = code.replace('const LANES=', inject+'const LANES=');
 
@@ -142,7 +166,7 @@ function endgameState(room,b){
   );
   code = code.replace(
     'const danger=chooseHeroTarget(enemies,b,210);',
-    'const danger=chooseHeroTarget(enemies,b,210);const allyInDanger=weakAlly(room,b);if(allyInDanger&&b.hero!=="assassin"&&danger&&dist(allyInDanger,danger)<210)b.botFocusId=danger.id;const recovery=recoveryState(room,b,low,allies,enemies);const counter=counterTarget(room,b,enemies,allies);const endgame=endgameState(room,b);'
+    'const danger=chooseHeroTarget(enemies,b,210);const allyInDanger=weakAlly(room,b);if(allyInDanger&&b.hero!=="assassin"&&danger&&dist(allyInDanger,danger)<210)b.botFocusId=danger.id;const recovery=recoveryState(room,b,low,allies,enemies);const counter=counterTarget(room,b,enemies,allies);const endgame=endgameState(room,b);const director=teamDirector(room,b,allies,enemies,lane,endgame);'
   );
   code = code.replace(
     'if(b.hero==="warrior"&&threat&&dist(b,threat)>150)target=threat;',
@@ -150,7 +174,7 @@ function endgameState(room,b){
   );
   code = code.replace(
     'if(wantsJungle){',
-    'if(endgame.finish&&endgame.ready&&!homeThreat&&!recovery.retreat){target=endgame.enemyBase;wantsJungle=false;}\nif(recovery.retreat){target=null;b.botTargetId=null;}\nif(wantsJungle&&!endgame.finish&&!recovery.retreat){'
+    'if(endgame.finish&&endgame.ready&&!homeThreat&&!recovery.retreat){target=endgame.enemyBase;wantsJungle=false;}\nif(recovery.retreat){target=null;b.botTargetId=null;}\nif(wantsJungle&&!endgame.finish&&!recovery.retreat&&director.job!=="finish"&&director.job!=="siege"){'
   );
   code = code.replace(
     '}else if(low){',
@@ -175,6 +199,14 @@ function endgameState(room,b){
   code = code.replace(
     'if(tower&&alliedMinions&&now>=b.botAttackAt){',
     'if(!tower&&endgame.finish&&endgame.enemyBase&&endgame.wave>0&&Math.abs(endgame.enemyBase.x-b.x)<65&&Math.abs(endgame.enemyBase.y-b.y)<85&&!recovery.retreat&&!low&&now>=b.botAttackAt){const dealt=(5+b.damageBonus*.5)*(1+(b.damageBuff||0));const actual=Math.min(endgame.enemyBase.hp,dealt);endgame.enemyBase.hp=Math.max(0,endgame.enemyBase.hp-dealt);b.towerDamage=(b.towerDamage||0)+actual;b.botAttackAt=now+850;}\n  if(tower&&alliedMinions&&now>=b.botAttackAt){'
+  );
+  code = code.replace(
+    'if(!low&&danger&&b.hero!=="warrior"&&now>=b.botSkillAt.w){',
+    'if(!low&&danger&&b.hero!=="warrior"&&now>=b.botSkillAt.w){'
+  );
+  code = code.replace(
+    'const base=room.bases.find(x=>x.team!==b.team);',
+    'const base=room.bases.find(x=>x.team!==b.team);'
   );
   return code;
 };
