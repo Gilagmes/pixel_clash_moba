@@ -1,6 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 
+// Never let an unexpected AI/timer exception take down the Render process.
+process.on('uncaughtException',err=>console.error('[PixelClash uncaughtException]',err?.stack||err));
+process.on('unhandledRejection',err=>console.error('[PixelClash unhandledRejection]',err?.stack||err));
+
 // AI 18.0 Combat Orchestrator: converts teamfight intent into a short,
 // deterministic execution sequence with target lock, engage window and finish.
 const __pixel18Read = fs.readFileSync;
@@ -93,7 +97,6 @@ tickBots=function(...args){
     if(room&&!room.finished)pixel18Orchestrate(room);
     return __pixel18OriginalTick.apply(this,args);
   }catch(e){
-    // Never let an AI-layer exception terminate the WebSocket game server.
     console.error('[Pixel18 tick]',e?.stack||e);
     return undefined;
   }
