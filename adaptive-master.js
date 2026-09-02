@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-// AI 14.0 Adaptive Combat Master: survival, cooldown-aware skill routing,
+// AI 15.0 Adaptive Combat Master: survival, cooldown-aware skill routing,
 // anti-overkill targeting and short combat memory layered above the combo AI.
 const originalRead = fs.readFileSync;
 const botsPath = path.resolve(__dirname, 'bots.js');
@@ -22,7 +22,7 @@ function pixelAdaptivePick(room,b){
     const ah=a.hp/Math.max(1,a.maxHp), ch=c.hp/Math.max(1,c.maxHp);
     const ad=dist(b,a), cd=dist(b,c);
     const aa=room.players.filter(p=>p.alive&&p.team===b.team&&dist(p,a)<260).length;
-    const ca=room.players.filter(p=>p.alive&&p.team===c.team&&dist(p,c)<260).length;
+    const ca=room.players.filter(p=>p.alive&&p.team===b.team&&dist(p,c)<260).length;
     let as=aa*65-ah*120-ad*.08;
     let cs=ca*65-ch*120-cd*.08;
     if(a.hero==='mage')as+=30;
@@ -38,7 +38,9 @@ function pixelAdaptiveReady(b,skill){
 function pixelAdaptivePlan(room,b){
   const enemies=pixelAdaptiveEnemies(room,b,360);
   const allies=pixelAdaptiveAllies(room,b,300);
-  const target=room.players.find(p=>p.alive&&p.id===b.botCombatTargetId&&p.team!==b.team)||pixelAdaptivePick(room,b);
+  const locked=room.players.find(p=>p.alive&&p.id===b.botAdaptiveLockId&&p.team!==b.team&&b.botAdaptiveLockUntil>Date.now());
+  const comboTarget=room.players.find(p=>p.alive&&p.id===b.botCombatTargetId&&p.team!==b.team);
+  const target=locked||comboTarget||pixelAdaptivePick(room,b);
   const hp=b.hp/Math.max(1,b.maxHp);
   const threatened=enemies.filter(e=>dist(b,e)<170).length>=2 || (enemies.length>=1&&hp<.27);
   const teamReady=allies.length>=1&&enemies.length>=1;
@@ -48,7 +50,13 @@ function pixelAdaptivePlan(room,b){
   else if(teamReady&&enemies.length>=2)b.botAdaptiveMode='TEAM_COMBO';
   else if(target&&target.hp/Math.max(1,target.maxHp)<.28)b.botAdaptiveMode='EXECUTE';
   else b.botAdaptiveMode='PRESSURE';
-  if(target)b.botAdaptiveTargetId=target.id;
+  if(target){
+    b.botAdaptiveTargetId=target.id;
+    if(!locked && !comboTarget){
+      b.botAdaptiveLockId=target.id;
+      b.botAdaptiveLockUntil=Date.now()+1800;
+    }
+  }
   b.botAdaptiveEnemyCount=enemies.length;
   b.botAdaptiveAllyCount=allies.length;
   return {target,enemies,allies,hp,threatened,teamReady};
