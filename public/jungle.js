@@ -5,6 +5,7 @@
   let hud=null,feed=null;
   function ensureHud(){
     if(!wrap||hud)return;
+    const style=document.createElement('style');style.textContent='#objectivesHud{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:70;display:flex;gap:8px;pointer-events:none;font-family:system-ui,sans-serif}.objective-card{min-width:118px;padding:7px 10px;border:1px solid rgba(255,255,255,.16);border-radius:12px;background:rgba(9,12,22,.84);backdrop-filter:blur(8px);box-shadow:0 8px 28px rgba(0,0,0,.28);color:#fff;text-align:center}.objective-card strong{display:block;font-size:11px;letter-spacing:.08em}.objective-card span{display:block;margin-top:2px;font-weight:800;font-size:14px}.objective-card.ready{border-color:rgba(255,210,90,.7);box-shadow:0 0 18px rgba(255,210,90,.18)}#objectiveFeed{position:absolute;top:72px;left:50%;transform:translateX(-50%);z-index:71;display:flex;flex-direction:column;align-items:center;gap:5px;pointer-events:none}.objective-event{padding:7px 13px;border-radius:999px;background:rgba(12,15,28,.9);border:1px solid rgba(255,255,255,.14);color:#fff;font-weight:800;font-size:12px;animation:objectivePop 3.4s ease both}@keyframes objectivePop{0%{opacity:0;transform:translateY(-10px) scale(.92)}12%,78%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-8px) scale(.98)}}@media(max-width:600px){#objectivesHud{top:8px;gap:4px;width:96%;justify-content:center}.objective-card{min-width:0;flex:1;padding:5px}.objective-card strong{font-size:9px}.objective-card span{font-size:12px}#objectiveFeed{top:55px;width:92%}.objective-event{font-size:11px;padding:6px 10px}}';document.head.appendChild(style);
     hud=document.createElement('div');hud.id='objectivesHud';hud.innerHTML='<div class="objective-card" data-o="blue"><strong>⚡ BLUE</strong><span>--</span></div><div class="objective-card" data-o="red"><strong>🔥 RED</strong><span>--</span></div><div class="objective-card" data-o="boss"><strong>🐉 DRAGON</strong><span>--</span></div>';wrap.appendChild(hud);
     feed=document.createElement('div');feed.id='objectiveFeed';wrap.appendChild(feed);
   }
@@ -12,13 +13,7 @@
   function renderObjectives(){ensureHud();if(!hud)return;const now=Date.now();for(const j of window.__pixelJungle){const card=hud.querySelector('[data-o="'+j.type+'"]');if(!card)continue;const span=card.querySelector('span');span.textContent=j.alive?'АКТИВЕН':fmt((j.respawnAt||0)-now);card.classList.toggle('ready',!j.alive&&((j.respawnAt||0)-now)<=0)}}
   function objectiveEvent(m){ensureHud();if(!feed)return;const icon=m.buff==='dragon'?'🐉':m.buff==='red'?'🔥':'⚡';const e=document.createElement('div');e.className='objective-event';e.textContent=icon+' '+m.monster+' повержен! +'+m.reward+' 🪙';feed.appendChild(e);setTimeout(()=>e.remove(),3400)}
   window.WebSocket=class extends NativeWS{
-    set onmessage(fn){
-      this._pcOnMessage=fn;
-      super.onmessage=e=>{
-        try{const m=JSON.parse(e.data);if(m.type==="state")window.__pixelJungle=Array.isArray(m.jungle)?m.jungle:[];if(m.type==="jungleKill")objectiveEvent(m)}catch{}
-        if(this._pcOnMessage)this._pcOnMessage(e);
-      };
-    }
+    set onmessage(fn){this._pcOnMessage=fn;super.onmessage=e=>{try{const m=JSON.parse(e.data);if(m.type==="state")window.__pixelJungle=Array.isArray(m.jungle)?m.jungle:[];if(m.type==="jungleKill")objectiveEvent(m)}catch{}if(this._pcOnMessage)this._pcOnMessage(e)}};
     get onmessage(){return this._pcOnMessage}
   };
   function draw(){
