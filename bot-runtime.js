@@ -8,6 +8,7 @@ Module._load=function(request,parent,isMain){
   const loaded=originalLoad.apply(this,arguments);
   if(request==='./bots' && parent && /server\.js$/.test(parent.filename) && loaded && !loaded.__pixelMotionWrapped){
     const originalTick=loaded.tickBots;
+    const originalEnsure=loaded.ensureBots;
     const wrapped={...loaded};
     wrapped.tickBots=function(room){
       originalTick(room);
@@ -27,6 +28,7 @@ Module._load=function(request,parent,isMain){
         if(now%1000<220)b.botMotionAt=now;
       }
     };
+    wrapped.ensureBots=originalEnsure;
     wrapped.__pixelMotionWrapped=true;
     return wrapped;
   }
@@ -46,6 +48,64 @@ if(source.includes(broken)){
 }else{
   console.log("[PixelClash runtime] broadcast patch not needed or signature changed");
 }
+
+// Arena visibility safety layer. It runs inside server.js scope, so it can
+// access the live rooms map and always keep bots/minions/state visible.
+source += `
+
+// PIXEL CLASH ARENA SAFETY: guaranteed bots, minion waves and state snapshots.
+(function pixelArenaSafety(){
+  const MINION_WAVE_MS=7000;
+  const STATE_MS=500;
+  function spawnFallbackWave(room,now){
+    if(!room||room.finished||!Array.isArray(room.minions))return;
+    const alive=room.minions.filter(m=>m&&m.alive!==false&&Number(m.hp)>0).length;
+    if(alive>0)return;
+    if(room.__pixelLastWave && now-room.__pixelLastWave<MINION_WAVE_MS)return;
+    room.__pixelLastWave=now;
+    const lanes=Array.isArray(LANES)&&LANES.length?LANES:[180,450,720];
+    let n=0;
+    for(const team of [1,2]){
+      for(const laneY of lanes){
+        const startX=team===1?125:875;
+        for(const type of ['melee','ranged']){
+          room.minions.push({
+            id:'m-fallback-'+now+'-'+team+'-'+n++,
+            team,x:startX,y:laneY,laneY,
+            hp:type==='melee'?70:48,maxHp:type==='melee'?70:48,
+            damage:type==='melee'?9:7,range:type==='melee'?34:150,
+            speed:type==='melee'?1.25:1.05,type,alive:true,attackAt:0,
+            __pixelFallback:true
+          });
+        }
+      }
+    }
+  }
+  setInterval(()=>{
+    const now=Date.now();
+    try{
+      for(const room of rooms.values()){
+        if(!room||room.finished)continue;
+        if(!Array.isArray(room.minions))room.minions=[];
+        if(!room.__pixelSafetyStarted)room.__pixelSafetyStarted=now;
+        // Give the normal bot system a second chance after the lobby settles.
+        if(now-room.startedAt>3500 && typeof ensureBots==='function'){
+          try{ensureBots(room)}catch(e){}
+        }
+        spawnFallbackWave(room,now);
+        // A lightweight fallback movement only for waves created here.
+        for(const m of room.minions){
+          if(!m||!m.__pixelFallback||m.alive===false||Number(m.hp)<=0)continue;
+          const dir=m.team===1?1:-1;
+          m.x+=dir*(Number(m.speed)||1.1)*0.45;
+          m.x=Math.max(70,Math.min(930,m.x));
+        }
+        if(typeof broadcastState==='function')broadcastState(room);
+      }
+    }catch(e){console.error('[PixelClash safety]',e.message)}
+  },STATE_MS);
+})();
+`;
 
 const mod=new Module(target,module);
 mod.filename=target;
