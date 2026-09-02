@@ -74,6 +74,24 @@ function teamFightReady(room,b,target){
   const enemies=room.players.filter(p=>p.alive&&p.team!==b.team&&dist(p,target)<280).length;
   return allies>=2&&allies>=enemies;
 }
+function baseThreat(room,b){
+  const base=room.bases?.find(x=>x.team===b.team);
+  if(!base)return null;
+  const enemyHero=room.players.filter(p=>p.alive&&p.team!==b.team&&dist(p,base)<260)
+    .sort((a,c)=>dist(a,base)-dist(c,base))[0];
+  if(enemyHero)return enemyHero;
+  const enemyMinion=room.minions.filter(m=>m.hp>0&&m.team!==b.team&&dist(m,base)<210)
+    .sort((a,c)=>dist(a,base)-dist(c,base))[0];
+  return enemyMinion||null;
+}
+function siegeTower(room,b,lane){
+  const towers=room.towers.filter(t=>t.alive&&t.team!==b.team&&t.laneY===lane);
+  return towers.sort((a,c)=>a.hp/Math.max(1,a.maxHp||a.hp)-c.hp/Math.max(1,c.maxHp||c.hp))[0]||null;
+}
+function alliedWaveAt(room,b,tower){
+  if(!tower)return 0;
+  return room.minions.filter(m=>m.hp>0&&m.team===b.team&&m.laneY===tower.laneY&&Math.abs(m.x-tower.x)<125).length;
+}
 `;
   if (!code.includes('function objectiveCamp(')) code = code.replace('const LANES=', inject+'const LANES=');
 
@@ -107,10 +125,9 @@ function teamFightReady(room,b,target){
   );
   code = code.replace(
     'if(b.hero==="warrior"&&threat&&dist(b,threat)>150)target=threat;',
-    'if(b.hero==="warrior"&&threat&&dist(b,threat)>150)target=threat;const focusedTeam=enemies.find(e=>e.id===b.botFocusId&&e.alive);if(focusedTeam&&teamFightReady(room,b,focusedTeam))target=focusedTeam;'
+    'if(b.hero==="warrior"&&threat&&dist(b,threat)>150)target=threat;const focusedTeam=enemies.find(e=>e.id===b.botFocusId&&e.alive);if(focusedTeam&&teamFightReady(room,b,focusedTeam))target=focusedTeam;const homeThreat=baseThreat(room,b);if(homeThreat){target=homeThreat;b.botFocusId=homeThreat.id;}'
   );
 
-  // Teamfight positioning: Warrior fronts, Mage keeps a backline distance, Assassin flanks.
   code = code.replace(
     'const nearbyAllies=allies.filter(a=>dist(a,target)<230).length;\n  const range=b.hero==="mage"?210:b.hero==="assassin"?155:150;',
     'const nearbyAllies=allies.filter(a=>dist(a,target)<230).length;\n  const teamReady=teamFightReady(room,b,target);\n  const range=b.hero==="mage"?210:b.hero==="assassin"?155:150;'
@@ -126,6 +143,12 @@ function teamFightReady(room,b,target){
   code = code.replace(
     '}else if(b.hero==="assassin"&&dist(b,target)<320){const flank=b.team===1?-1:1;',
     '}else if(b.hero==="assassin"&&dist(b,target)<360){const flank=b.team===1?-1:1;'
+  );
+
+  // Siege discipline: bots only hit a tower with a real allied minion wave nearby.
+  code = code.replace(
+    'const tower=room.towers.find(t=>t.alive&&t.team!==b.team&&t.laneY===lane&&Math.abs(t.x-b.x)<175);\n  const alliedMinions=room.minions.some(m=>m.hp>0&&m.team===b.team&&m.laneY===lane&&Math.abs(m.x-(tower?.x||b.x))<100);',
+    'const tower=siegeTower(room,b,lane);\n  const alliedWave=alliedWaveAt(room,b,tower);\n  const alliedMinions=alliedWave>0;\n  if(tower&&!alliedMinions&&!homeThreat&&dist(b,tower)<240){b.x+=(center.x-b.x)*.035;b.y+=(center.y-b.y)*.035;}'
   );
 
   return code;
