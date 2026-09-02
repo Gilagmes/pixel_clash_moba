@@ -52,26 +52,29 @@ function connect() {
 
   ws.onopen = () => {
     statusEl.textContent = "Поиск игроков...";
+    me = null;
     ws.send(JSON.stringify({ type: "join", mode, name: playerName() }));
   };
 
   ws.onmessage = (event) => {
     try {
       const message = JSON.parse(event.data);
+      if (message.type === "combat") {
+        statusEl.textContent = message.action === "skill" ? "⚡ Попадание способности!" : "⚔️ Удар!";
+        setTimeout(() => updateStatus(), 650);
+      }
       if (message.type !== "state") return;
       players = Array.isArray(message.players) ? message.players : [];
       if (me) me = players.find((p) => p.id === me.id) || null;
       if (!me) me = players[players.length - 1] || null;
-      statusEl.textContent = `Игроков: ${players.length}/${mode === "5v5" ? 10 : 6}`;
+      updateStatus();
       draw();
     } catch {
       statusEl.textContent = "Ошибка данных";
     }
   };
 
-  ws.onerror = () => {
-    statusEl.textContent = "Ошибка соединения";
-  };
+  ws.onerror = () => { statusEl.textContent = "Ошибка соединения"; };
 
   ws.onclose = () => {
     ws = null;
@@ -83,24 +86,33 @@ function connect() {
   };
 }
 
+function updateStatus() {
+  const max = mode === "5v5" ? 10 : 6;
+  if (!me) return;
+  statusEl.textContent = `Игроков: ${players.length}/${max} • HP ${me.hp ?? 100}`;
+}
+
 function move(dx, dy) {
-  if (!ws || ws.readyState !== WebSocket.OPEN || !me) return;
+  if (!ws || ws.readyState !== WebSocket.OPEN || !me || !me.alive) return;
   ws.send(JSON.stringify({ type: "move", x: me.x + dx, y: me.y + dy }));
 }
 
-const directions = {
-  up: [0, -45], down: [0, 45], left: [-45, 0], right: [45, 0]
-};
+function attack() {
+  if (ws?.readyState === WebSocket.OPEN && me?.alive) ws.send(JSON.stringify({ type: "attack" }));
+}
+
+function useSkill() {
+  if (ws?.readyState === WebSocket.OPEN && me?.alive) ws.send(JSON.stringify({ type: "skill" }));
+}
+
+const directions = { up: [0, -45], down: [0, 45], left: [-45, 0], right: [45, 0] };
 
 function press(key) {
   if (pressed.has(key)) return;
   pressed.add(key);
   move(...directions[key]);
 }
-
-function release(key) {
-  pressed.delete(key);
-}
+function release(key) { pressed.delete(key); }
 
 document.querySelectorAll("[data-key]").forEach((button) => {
   const key = button.dataset.key;
@@ -116,11 +128,9 @@ document.querySelectorAll("[data-key]").forEach((button) => {
 document.addEventListener("keydown", (event) => {
   const map = { ArrowUp: "up", w: "up", ArrowDown: "down", s: "down", ArrowLeft: "left", a: "left", ArrowRight: "right", d: "right" };
   const key = map[event.key];
-  if (key) {
-    event.preventDefault();
-    press(key);
-  }
+  if (key) { event.preventDefault(); press(key); }
   if (event.key.toLowerCase() === "q") useSkill();
+  if (event.key === " " || event.key.toLowerCase() === "e") { event.preventDefault(); attack(); }
 });
 
 document.addEventListener("keyup", (event) => {
@@ -128,15 +138,7 @@ document.addEventListener("keyup", (event) => {
   if (map[event.key]) release(map[event.key]);
 });
 
-function useSkill() {
-  statusEl.textContent = "⚡ Способность активирована!";
-  setTimeout(() => {
-    if (ws?.readyState === WebSocket.OPEN) {
-      statusEl.textContent = `Игроков: ${players.length}/${mode === "5v5" ? 10 : 6}`;
-    }
-  }, 900);
-}
-
+document.getElementById("attack").addEventListener("click", attack);
 document.getElementById("skill").addEventListener("click", useSkill);
 
 function draw() {
@@ -155,12 +157,18 @@ function draw() {
   ctx.fillRect(910, 380, 55, 140);
 
   players.forEach((player) => {
+    if (!player.alive) return;
     ctx.fillStyle = player.id === me?.id ? "#ffd34d" : player.team === 1 ? "#55b9ff" : "#ff5b6e";
     ctx.fillRect(player.x - 14, player.y - 14, 28, 28);
+    const hp = Math.max(0, Math.min(1, (player.hp ?? 100) / (player.maxHp ?? 100)));
+    ctx.fillStyle = "#111";
+    ctx.fillRect(player.x - 20, player.y - 29, 40, 5);
+    ctx.fillStyle = "#45d483";
+    ctx.fillRect(player.x - 20, player.y - 29, 40 * hp, 5);
     ctx.fillStyle = "#111";
     ctx.font = "12px monospace";
     ctx.textAlign = "center";
-    ctx.fillText(player.name, player.x, player.y - 20);
+    ctx.fillText(player.name, player.x, player.y - 35);
   });
 }
 
