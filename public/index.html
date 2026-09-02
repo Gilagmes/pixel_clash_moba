@@ -8,45 +8,33 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Pixel Clash Arena</title>
-<link rel="stylesheet" href="/style.css?v=20260902-3">
+<link rel="stylesheet" href="/style.css?v=20260902-4">
 </head>
 <body>
 <div id="app">
-  <header>
-    <div class="logo">PIXEL CLASH</div>
-    <div class="coins">🪙 <span id="coins">1000</span></div>
-  </header>
+  <header><div class="logo">PIXEL CLASH</div><div class="coins">🪙 <span id="coins">1000</span></div></header>
   <main>
     <section id="menu" class="panel">
       <h1>PIXEL CLASH ARENA</h1>
-      <p class="muted">Пиксельная MOBA • Telegram Mini App</p>
-      <div class="modes">
-        <button class="mode active" data-mode="3v3">⚔️ 3 × 3<small>6 игроков</small></button>
-        <button class="mode" data-mode="5v5">🔥 5 × 5<small>10 игроков</small></button>
+      <p class="muted">Пиксельная MOBA • 3 линии • башни • миньоны</p>
+      <div class="modes"><button class="mode active" data-mode="3v3">⚔️ 3 × 3<small>6 игроков</small></button><button class="mode" data-mode="5v5">🔥 5 × 5<small>10 игроков</small></button></div>
+      <div class="hero-title">ВЫБЕРИ ГЕРОЯ</div>
+      <div class="heroes">
+        <button class="hero active" data-hero="warrior">🛡️<b>Warrior</b><small>130 HP · 16 урон</small></button>
+        <button class="hero" data-hero="mage">🔮<b>Mage</b><small>90 HP · мощный Q</small></button>
+        <button class="hero" data-hero="assassin">🗡️<b>Assassin</b><small>80 HP · быстрый урон</small></button>
       </div>
       <button id="play" class="primary">ИГРАТЬ</button>
-      <div class="features">🏰 3 линии · 🌲 лес · ⚔️ герои · 🏆 рейтинг</div>
+      <div class="features">🏰 6 башен на линии · 🧟 волны миньонов · 💎 базы · ⚡ способности</div>
     </section>
     <section id="game" class="hidden">
-      <div class="hud">
-        <span id="modeLabel">3 × 3</span>
-        <span id="status">Подключение...</span>
-      </div>
-      <canvas id="arena" width="1000" height="900"></canvas>
-      <div class="controls">
-        <div class="pad">
-          <button data-key="up" aria-label="Вверх">▲</button>
-          <div><button data-key="left" aria-label="Влево">◀</button><button data-key="down" aria-label="Вниз">▼</button><button data-key="right" aria-label="Вправо">▶</button></div>
-        </div>
-        <div class="combat-controls">
-          <button id="attack" class="attack" aria-label="Атака">⚔️</button>
-          <button id="skill" class="skill" aria-label="Способность">Q</button>
-        </div>
-      </div>
+      <div class="hud"><span id="modeLabel">3 × 3</span><span id="status">Подключение...</span></div>
+      <div class="game-wrap"><canvas id="arena" width="1000" height="900"></canvas><div id="death" class="death hidden">☠️ ВЫ ПОГИБЛИ<small>Возрождение через 5 сек.</small></div></div>
+      <div class="controls"><div class="pad"><button data-key="up" aria-label="Вверх">▲</button><div><button data-key="left" aria-label="Влево">◀</button><button data-key="down" aria-label="Вниз">▼</button><button data-key="right" aria-label="Вправо">▶</button></div></div><div class="combat-controls"><button id="attack" class="attack" aria-label="Атака">⚔️</button><button id="skill" class="skill" aria-label="Способность">Q</button></div></div>
     </section>
   </main>
 </div>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="/game.js?v=20260902-3"></script>
+<script src="/game.js?v=20260902-4"></script>
 </body>
 </html>
