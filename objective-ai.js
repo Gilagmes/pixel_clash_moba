@@ -91,57 +91,31 @@ function alliedWaveAt(room,b,tower){
   if(!tower)return 0;
   return room.minions.filter(m=>m.hp>0&&m.team===b.team&&m.laneY===tower.laneY&&Math.abs(m.x-tower.x)<125).length;
 }
+function enemyBaseOpen(room,b){
+  const towers=room.towers.filter(t=>t.alive&&t.team!==b.team);
+  return towers.length===0;
+}
+function finalPushReady(room,b,base){
+  if(!base)return false;
+  const wave=room.minions.filter(m=>m.hp>0&&m.team===b.team&&Math.abs(m.x-base.x)<150).length;
+  const allies=room.players.filter(p=>p.alive&&p.team===b.team&&p.id!==b.id&&dist(p,base)<260).length;
+  return wave>=1&&allies>=1;
+}
 `;
   if (!code.includes('function objectiveCamp(')) code = code.replace('const LANES=', inject+'const LANES=');
-
-  code = code.replace(
-    'const camp=room.jungle?.filter(j=>j.alive).sort((a,c)=>dist(b,a)-dist(b,c))[0];',
-    'const camp=objectiveCamp(room,b,now);const objectiveEnemy=objectiveEnemyNear(room,b,camp);const objectiveAllies=objectiveAlliesNear(room,b,camp,320);const objectiveReady=!!(camp&&now>=b.botJungleAt&&b.hp>b.maxHp*.58);const objectiveContest=!!(objectiveEnemy&&dist(b,objectiveEnemy)<230&&(objectiveAllies>0||camp.buff==="dragon"));if(objectiveReady&&!low&&objectiveContest){target=objectiveEnemy;b.botFocusId=objectiveEnemy.id;}else if(objectiveReady&&!low&&(!danger||dist(b,danger)>280)&&(camp.buff==="dragon"||objectiveAllies>0)){target=null;if(objectiveEnemy)b.botFocusId=objectiveEnemy.id;}'
-  );
-  code = code.replace(
-    'const wantsJungle=!target&&!danger&&camp&&now>=b.botJungleAt&&(b.gold<900||b.hp>b.maxHp*.65);',
-    'const wantsJungle=!!(camp&&now>=b.botJungleAt&&b.hp>b.maxHp*.58&&!objectiveContest&&(!target||(!danger&&camp.buff!=="blue")||camp.buff==="dragon"));'
-  );
-  code = code.replace(
-    'const lane=b.botLane||LANES[0],dir=b.team===1?1:-1;',
-    'const coordinatedLane=pushLane(room,b);const lane=(now>=b.botLaneAt-1200&&room.players.filter(p=>p.alive&&p.team===b.team&&p.isBot&&Math.abs((p.botLane||LANES[0])-coordinatedLane)<1).length>=1)?coordinatedLane:(b.botLane||LANES[0]),dir=b.team===1?1:-1;'
-  );
-  code = code.replace(
-    'const grouped=allies.filter(a=>dist(a,b)<300).length>=1;',
-    'const grouped=allies.filter(a=>dist(a,b)<300).length>=1;const pushGroup=room.players.filter(p=>p.alive&&p.team===b.team&&Math.abs(p.y-lane)<140).length>=2;'
-  );
-  code = code.replace(
-    'const allies=room.players.filter(p=>p.alive&&p.team===b.team&&p.id!==b.id);',
-    'const allies=room.players.filter(p=>p.alive&&p.team===b.team&&p.id!==b.id);const fightTarget=teamFightFocus(room,b,enemies);if(fightTarget)b.botFocusId=fightTarget.id;'
-  );
-  code = code.replace(
-    'const danger=chooseHeroTarget(enemies,b,210);',
-    'const danger=chooseHeroTarget(enemies,b,210);const allyInDanger=weakAlly(room,b);if(allyInDanger&&b.hero!=="assassin"&&danger&&dist(allyInDanger,danger)<210)b.botFocusId=danger.id;'
-  );
-  code = code.replace(
-    'if(b.hero==="warrior"&&threat&&dist(b,threat)>150)target=threat;',
-    'if(b.hero==="warrior"&&threat&&dist(b,threat)>150)target=threat;const focusedTeam=enemies.find(e=>e.id===b.botFocusId&&e.alive);if(focusedTeam&&teamFightReady(room,b,focusedTeam))target=focusedTeam;const homeThreat=baseThreat(room,b);if(homeThreat){target=homeThreat;b.botFocusId=homeThreat.id;}'
-  );
-  code = code.replace(
-    'const nearbyAllies=allies.filter(a=>dist(a,target)<230).length;\n  const range=b.hero==="mage"?210:b.hero==="assassin"?155:150;',
-    'const nearbyAllies=allies.filter(a=>dist(a,target)<230).length;\n  const teamReady=teamFightReady(room,b,target);\n  const range=b.hero==="mage"?210:b.hero==="assassin"?155:150;'
-  );
-  code = code.replace(
-    'if(b.hero==="warrior"){',
-    'if(b.hero==="warrior"){\n    if(teamReady&&dist(b,target)>125){b.x+=(target.x-b.x)*.07;b.y+=(target.y-b.y)*.055}'
-  );
-  code = code.replace(
-    '}else if(b.hero==="mage"){',
-    '}else if(b.hero==="mage"){\n    if(teamReady&&dist(b,target)<175){b.x-=(target.x-b.x)*.045;b.y+=(b.y-target.y)*.035}'
-  );
-  code = code.replace(
-    '}else if(b.hero==="assassin"&&dist(b,target)<320){const flank=b.team===1?-1:1;',
-    '}else if(b.hero==="assassin"&&dist(b,target)<360){const flank=b.team===1?-1:1;'
-  );
-  code = code.replace(
-    'const tower=room.towers.find(t=>t.alive&&t.team!==b.team&&t.laneY===lane&&Math.abs(t.x-b.x)<175);\n  const alliedMinions=room.minions.some(m=>m.hp>0&&m.team===b.team&&m.laneY===lane&&Math.abs(m.x-(tower?.x||b.x))<100);',
-    'const tower=siegeTower(room,b,lane);\n  const alliedWave=alliedWaveAt(room,b,tower);\n  const alliedMinions=alliedWave>0;\n  if(tower&&!alliedMinions&&!homeThreat&&dist(b,tower)<240){b.x+=(center.x-b.x)*.035;b.y+=(center.y-b.y)*.035;}'
-  );
+  code = code.replace('const camp=room.jungle?.filter(j=>j.alive).sort((a,c)=>dist(b,a)-dist(b,c))[0];','const camp=objectiveCamp(room,b,now);const objectiveEnemy=objectiveEnemyNear(room,b,camp);const objectiveAllies=objectiveAlliesNear(room,b,camp,320);const objectiveReady=!!(camp&&now>=b.botJungleAt&&b.hp>b.maxHp*.58);const objectiveContest=!!(objectiveEnemy&&dist(b,objectiveEnemy)<230&&(objectiveAllies>0||camp.buff==="dragon"));if(objectiveReady&&!low&&objectiveContest){target=objectiveEnemy;b.botFocusId=objectiveEnemy.id;}else if(objectiveReady&&!low&&(!danger||dist(b,danger)>280)&&(camp.buff==="dragon"||objectiveAllies>0)){target=null;if(objectiveEnemy)b.botFocusId=objectiveEnemy.id;}');
+  code = code.replace('const wantsJungle=!target&&!danger&&camp&&now>=b.botJungleAt&&(b.gold<900||b.hp>b.maxHp*.65);','const wantsJungle=!!(camp&&now>=b.botJungleAt&&b.hp>b.maxHp*.58&&!objectiveContest&&(!target||(!danger&&camp.buff!=="blue")||camp.buff==="dragon"));');
+  code = code.replace('const lane=b.botLane||LANES[0],dir=b.team===1?1:-1;','const coordinatedLane=pushLane(room,b);const lane=(now>=b.botLaneAt-1200&&room.players.filter(p=>p.alive&&p.team===b.team&&p.isBot&&Math.abs((p.botLane||LANES[0])-coordinatedLane)<1).length>=1)?coordinatedLane:(b.botLane||LANES[0]),dir=b.team===1?1:-1;');
+  code = code.replace('const grouped=allies.filter(a=>dist(a,b)<300).length>=1;','const grouped=allies.filter(a=>dist(a,b)<300).length>=1;const pushGroup=room.players.filter(p=>p.alive&&p.team===b.team&&Math.abs(p.y-lane)<140).length>=2;');
+  code = code.replace('const allies=room.players.filter(p=>p.alive&&p.team===b.team&&p.id!==b.id);','const allies=room.players.filter(p=>p.alive&&p.team===b.team&&p.id!==b.id);const fightTarget=teamFightFocus(room,b,enemies);if(fightTarget)b.botFocusId=fightTarget.id;');
+  code = code.replace('const danger=chooseHeroTarget(enemies,b,210);','const danger=chooseHeroTarget(enemies,b,210);const allyInDanger=weakAlly(room,b);if(allyInDanger&&b.hero!=="assassin"&&danger&&dist(allyInDanger,danger)<210)b.botFocusId=danger.id;');
+  code = code.replace('if(b.hero==="warrior"&&threat&&dist(b,threat)>150)target=threat;','if(b.hero==="warrior"&&threat&&dist(b,threat)>150)target=threat;const focusedTeam=enemies.find(e=>e.id===b.botFocusId&&e.alive);if(focusedTeam&&teamFightReady(room,b,focusedTeam))target=focusedTeam;const homeThreat=baseThreat(room,b);if(homeThreat){target=homeThreat;b.botFocusId=homeThreat.id;}');
+  code = code.replace('const nearbyAllies=allies.filter(a=>dist(a,target)<230).length;\n  const range=b.hero==="mage"?210:b.hero==="assassin"?155:150;','const nearbyAllies=allies.filter(a=>dist(a,target)<230).length;\n  const teamReady=teamFightReady(room,b,target);\n  const range=b.hero==="mage"?210:b.hero==="assassin"?155:150;');
+  code = code.replace('if(b.hero==="warrior"){','if(b.hero==="warrior"){\n    if(teamReady&&dist(b,target)>125){b.x+=(target.x-b.x)*.07;b.y+=(target.y-b.y)*.055}');
+  code = code.replace('}else if(b.hero==="mage"){','}else if(b.hero==="mage"){\n    if(teamReady&&dist(b,target)<175){b.x-=(target.x-b.x)*.045;b.y+=(b.y-target.y)*.035}');
+  code = code.replace('}else if(b.hero==="assassin"&&dist(b,target)<320){const flank=b.team===1?-1:1;','}else if(b.hero==="assassin"&&dist(b,target)<360){const flank=b.team===1?-1:1;');
+  code = code.replace('const tower=room.towers.find(t=>t.alive&&t.team!==b.team&&t.laneY===lane&&Math.abs(t.x-b.x)<175);\n  const alliedMinions=room.minions.some(m=>m.hp>0&&m.team===b.team&&m.laneY===lane&&Math.abs(m.x-(tower?.x||b.x))<100);','const tower=siegeTower(room,b,lane);\n  const alliedWave=alliedWaveAt(room,b,tower);\n  const alliedMinions=alliedWave>0;\n  if(tower&&!alliedMinions&&!homeThreat&&dist(b,tower)<240){b.x+=(center.x-b.x)*.035;b.y+=(center.y-b.y)*.035;}');
+  code = code.replace('const base=room.bases.find(x=>x.team!==b.team);const alliedMinionsNearBase=room.minions.some(m=>m.hp>0&&m.team===b.team&&Math.abs(m.x-(base?.x||999))<120);if(base&&alliedMinionsNearBase&&Math.abs(base.x-b.x)<65&&Math.abs(base.y-b.y)<85&&!low&&now>=b.botAttackAt){const dealt=(5+b.damageBonus*.5)*(1+(b.damageBuff||0));const actual=Math.min(base.hp,dealt);base.hp=Math.max(0,base.hp-dealt);b.towerDamage=(b.towerDamage||0)+actual;b.botAttackAt=now+900}','const base=room.bases.find(x=>x.team!==b.team);const alliedMinionsNearBase=room.minions.some(m=>m.hp>0&&m.team===b.team&&Math.abs(m.x-(base?.x||999))<150);const finalPush=enemyBaseOpen(room,b)&&finalPushReady(room,b,base);if(base&&alliedMinionsNearBase&&Math.abs(base.x-b.x)<80&&Math.abs(base.y-b.y)<100&&!low&&now>=b.botAttackAt&&(finalPush||alliedMinionsNearBase)){const dealt=(b.hero==="warrior"?7:b.hero==="assassin"?6:5)+b.damageBonus*.5+(finalPush?2:0);const actual=Math.min(base.hp,dealt);base.hp=Math.max(0,base.hp-dealt);b.towerDamage=(b.towerDamage||0)+actual;b.botAttackAt=now+800;if(base.hp<=0){base.hp=0;b.botTargetId=null;}}');
   return code;
 };
 
