@@ -1,9 +1,9 @@
 {
   "name": "pixel-clash-moba",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "private": true,
   "scripts": {
-    "start": "node bot-runtime.js"
+    "start": "node respawn-runtime.js"
   },
   "dependencies": {
     "express": "^5.1.0",
