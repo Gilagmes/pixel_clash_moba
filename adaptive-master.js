@@ -32,12 +32,8 @@ function pixelAdaptivePick(room,b){
     return cs-as;
   })[0]||null;
 }
-function pixelAdaptiveCooldown(b,skill){
-  const cd=b.cooldowns?.[skill];
-  return typeof cd==='number'?cd:0;
-}
 function pixelAdaptiveReady(b,skill){
-  return pixelAdaptiveCooldown(b,skill)<=Date.now();
+  return (b?.botSkillAt?.[skill]||0)<=Date.now();
 }
 function pixelAdaptivePlan(room,b){
   const enemies=pixelAdaptiveEnemies(room,b,360);
@@ -58,8 +54,6 @@ function pixelAdaptivePlan(room,b){
   return {target,enemies,allies,hp,threatened,teamReady};
 }
 
-// Route every skill request through the live combat state. This keeps the
-// existing bot tick intact while making the final ability choice adaptive.
 const __pixelAdaptiveOriginalUseSkill = useSkill;
 useSkill = function(room,b,skill,target){
   try{
@@ -70,15 +64,10 @@ useSkill = function(room,b,skill,target){
         const hp=target.hp/Math.max(1,target.maxHp);
         const enemyCount=plan.enemies.length;
         const allyCount=plan.allies.length;
-        // Never burn an ultimate into a nearly-dead target when a basic skill
-        // can finish it, unless this is an active team combo window.
         const comboLive=room.pixelAdvancedCombo?.[b.team]?.until>Date.now();
         if(skill==='r'&&!comboLive&&hp<.18&&pixelAdaptiveReady(b,'q'))skill='q';
-        // Mage: prefer AoE ultimate when the fight is clustered.
         if(b.hero==='mage'&&enemyCount>=2&&pixelAdaptiveReady(b,'r')&&dist(b,target)<=240)skill='r';
-        // Assassin: use dash/execute when the target is isolated or low.
         if(b.hero==='assassin'&&(hp<.45||allyCount===0)&&pixelAdaptiveReady(b,'e')&&dist(b,target)<=190)skill='e';
-        // Warrior: initiate with R only when there is a real team fight.
         if(b.hero==='warrior'&&enemyCount>=2&&allyCount>=1&&pixelAdaptiveReady(b,'r')&&dist(b,target)<=240)skill='r';
         if(b.botAdaptiveMode==='SURVIVE'&&b.hero==='warrior'&&pixelAdaptiveReady(b,'w'))skill='w';
       }
