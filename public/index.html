@@ -2,7 +2,8 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#10131d">
 <title>Pixel Clash Arena</title>
 <link rel="stylesheet" href="/style.css">
 </head>
@@ -31,14 +32,15 @@
       <canvas id="arena" width="1000" height="900"></canvas>
       <div class="controls">
         <div class="pad">
-          <button data-key="up">▲</button>
-          <div><button data-key="left">◀</button><button data-key="down">▼</button><button data-key="right">▶</button></div>
+          <button data-key="up" aria-label="Вверх">▲</button>
+          <div><button data-key="left" aria-label="Влево">◀</button><button data-key="down" aria-label="Вниз">▼</button><button data-key="right" aria-label="Вправо">▶</button></div>
         </div>
-        <button id="skill" class="skill">Q</button>
+        <button id="skill" class="skill" aria-label="Способность">Q</button>
       </div>
     </section>
   </main>
 </div>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="/game.js"></script>
 </body>
 </html>
