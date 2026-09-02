@@ -101,6 +101,37 @@ tickBots=function(...args){
     return undefined;
   }
 };
+
+/* PixelBotMotionSafety */
+const __pixelMotionOriginalTick=tickBots;
+tickBots=function(...args){
+  const room=args[0];
+  let result;
+  try{result=__pixelMotionOriginalTick.apply(this,args)}catch(e){console.error('[BotMotion tick]',e?.stack||e)}
+  try{
+    if(room&&!room.finished){
+      const now=Date.now();
+      for(const b of room.players.filter(p=>p.isBot&&p.alive)){
+        if(!b.botMotionSampleAt){b.botMotionSampleAt=now;b.botMotionSampleX=b.x;b.botMotionSampleY=b.y;continue}
+        if(now-b.botMotionSampleAt<300)continue;
+        const moved=Math.hypot(b.x-b.botMotionSampleX,b.y-b.botMotionSampleY);
+        b.botMotionSampleAt=now;b.botMotionSampleX=b.x;b.botMotionSampleY=b.y;
+        if(moved>1.2)continue;
+        const lane=b.botLane||180;
+        const enemy=room.players.filter(p=>p.alive&&p.team!==b.team).sort((a,c)=>Math.hypot(a.x-b.x,a.y-b.y)-Math.hypot(c.x-b.x,c.y-b.y))[0];
+        const minion=room.minions.filter(m=>m.hp>0&&m.team!==b.team&&m.laneY===lane).sort((a,c)=>Math.abs(a.x-b.x)-Math.abs(c.x-b.x))[0];
+        let tx=b.team===1?700:300,ty=lane;
+        if(enemy&&Math.hypot(enemy.x-b.x,enemy.y-b.y)<430){tx=enemy.x;ty=enemy.y}
+        else if(minion){tx=minion.x;ty=minion.y}
+        const dx=tx-b.x,dy=ty-b.y,len=Math.max(1,Math.hypot(dx,dy));
+        const step=3.2+(b.speedBonus||0)*2;
+        b.x=Math.max(90,Math.min(910,b.x+dx/len*step));
+        b.y=Math.max(90,Math.min(810,b.y+dy/len*step));
+      }
+    }
+  }catch(e){console.error('[BotMotion]',e?.stack||e)}
+  return result;
+};
 `;
   return code+inject;
 }
