@@ -14,15 +14,14 @@ function ensureBots(room){
   const wanted=room.maxPlayers-humans;
   let bots=room.players.filter(p=>p.isBot);
   while(bots.length<wanted){
-    const i=room.players.length;
     const team=room.players.filter(p=>p.team===1).length<=room.players.filter(p=>p.team===2).length?1:2;
     const hero=HEROES[(bots.length+team)%HEROES.length];
-    const stats={warrior:[130,16,150,1],mage:[90,10,180,1],assassin:[80,22,140,1.18]}[hero];
+    const stats={warrior:[130,16],mage:[90,10],assassin:[80,22]}[hero];
     const bot={id:`bot-${Math.random().toString(36).slice(2,9)}`,name:BOT_NAMES[bots.length%BOT_NAMES.length],hero,heroName:hero[0].toUpperCase()+hero.slice(1),team,x:team===1?115:885,y:LANES[bots.length%3],hp:stats[0],maxHp:stats[0],alive:true,respawnAt:0,gold:500,kills:0,deaths:0,damageBonus:0,speedBonus:0,inventory:[],level:1,xp:0,skillPoints:0,skillLevels:{q:1,w:1,e:1,r:1},isBot:true,botAttackAt:0,botSkillAt:0,botHealAt:0,botBuyAt:Date.now()+5000,botLane:LANES[bots.length%3],botTargetId:null,damageDealt:0,towerDamage:0};
     room.players.push(bot);bots.push(bot);
   }
 }
-function damage(room,attacker,target,amount){if(!target||target.alive===false)return;const dealt=Math.max(0,Math.min(target.hp,amount));target.hp=Math.max(0,target.hp-amount);if(attacker){attacker.damageDealt=(attacker.damageDealt||0)+dealt}if(target.hp>0)return;target.alive=false;target.deaths=(target.deaths||0)+1;target.respawnAt=Date.now()+5000;if(attacker){attacker.kills=(attacker.kills||0)+1;attacker.gold=(attacker.gold||0)+100;gainXp(attacker,100)}}
+function damage(room,attacker,target,amount){if(!target||target.alive===false)return;const dealt=Math.max(0,Math.min(target.hp,amount));target.hp=Math.max(0,target.hp-amount);if(attacker)attacker.damageDealt=(attacker.damageDealt||0)+dealt;if(target.hp>0)return;target.alive=false;target.deaths=(target.deaths||0)+1;target.respawnAt=Date.now()+5000;if(attacker){attacker.kills=(attacker.kills||0)+1;attacker.gold=(attacker.gold||0)+100;gainXp(attacker,100)}}
 function nearest(arr,b,limit,filter){let best=null,d=Infinity;for(const t of arr){if(filter&&!filter(t))continue;const n=dist(b,t);if(n<=limit&&n<d){d=n;best=t}}return best}
 function tickBots(room){
   const now=Date.now();
@@ -38,20 +37,17 @@ function tickBots(room){
     const low=b.hp<b.maxHp*.35;
     const danger=nearest(enemies,b,180,p=>Math.abs(p.y-b.y)<100);
     if(low){
-      const retreatX=b.team===1?135:865;b.x+=(retreatX-b.x)*.09;
-      b.y+=(lane-b.y)*.1;
+      const retreatX=b.team===1?135:865;b.x+=(retreatX-b.x)*.09;b.y+=(lane-b.y)*.1;
       if(now>=b.botHealAt){b.botHealAt=now+5000;b.hp=Math.min(b.maxHp,b.hp+Math.round(b.maxHp*.22))}
     }else if(target){
       b.botTargetId=target.id;
       const attackRange=b.hero==="mage"?190:b.hero==="assassin"?155:170;
       if(dist(b,target)>attackRange*.72){b.x+=Math.sign(target.x-b.x)*1.55;b.y+=(target.y-b.y)*.055}else if(now>=b.botAttackAt){b.botAttackAt=now+(b.hero==="assassin"?500:700);damage(room,b,target,(b.hero==="assassin"?18:b.hero==="warrior"?14:12)+b.damageBonus)}
-      if(now>=b.botSkillAt){
-        const key=b.hero==="mage"?"q":b.hero==="assassin"?"e":"q";
-        const rank=b.skillLevels[key]||1;
-        const skillRange=key==="e"?125:240;
+      if(now>=b.botSkillAt&&target.alive){
+        const key=b.hero==="mage"?"q":b.hero==="assassin"?"e":"q",rank=b.skillLevels[key]||1,skillRange=key==="e"?125:240;
         if(dist(b,target)<=skillRange){
-          b.botSkillAt=now+(key==="q"?3500:key==="e"?8000:6000);
-          if(key==="e"){b.x=target.x-b.team===1?35:-35;b.x=clamp(b.x,80,920)}
+          b.botSkillAt=now+(key==="q"?3500:8000);
+          if(key==="e"){const offset=b.team===1?35:-35;b.x=clamp(target.x-offset,80,920);b.y=clamp(target.y,90,810)}
           damage(room,b,target,(key==="q"?30:key==="e"?35:25)+b.damageBonus+rank*3);
         }
       }
@@ -62,13 +58,12 @@ function tickBots(room){
       if(now>=b.botAttackAt){
         const tower=room.towers.find(t=>t.alive&&t.team!==b.team&&t.laneY===lane&&Math.abs(t.x-b.x)<170);
         if(tower){const dmg=(b.hero==="mage"?9:7)+b.damageBonus;tower.hp=Math.max(0,tower.hp-dmg);b.towerDamage=(b.towerDamage||0)+dmg;b.botAttackAt=now+800;if(tower.hp===0){tower.alive=false;for(const p of room.players)if(p.team===b.team){p.gold+=75;gainXp(p,50)}}}
-        else {b.botAttackAt=now+500}
+        else b.botAttackAt=now+500;
       }
     }
     if(!low&&danger&&now>=b.botSkillAt){
-      const key=b.hero==="warrior"?"w":"q";
-      if(key==="w"){b.hp=Math.min(b.maxHp,b.hp+Math.round(b.maxHp*.18));b.botSkillAt=now+6000}
-      else if(dist(b,danger)<240){b.botSkillAt=now+3500;damage(room,b,danger,25+(b.skillLevels.q||1)*3+b.damageBonus)}
+      if(b.hero==="warrior"){b.hp=Math.min(b.maxHp,b.hp+Math.round(b.maxHp*.18));b.botSkillAt=now+6000}
+      else if(dist(b,danger)<240){b.botSkillAt=now+(b.hero==="assassin"?8000:3500);damage(room,b,danger,(b.hero==="assassin"?35:25)+(b.skillLevels.q||1)*3+b.damageBonus)}
     }
     const base=room.bases.find(x=>x.team!==b.team);
     if(base&&Math.abs(base.x-b.x)<70&&Math.abs(base.y-b.y)<80&&!low&&now>=b.botAttackAt){const dmg=5+b.damageBonus*.5;base.hp=Math.max(0,base.hp-dmg);b.towerDamage=(b.towerDamage||0)+dmg;b.botAttackAt=now+900}
