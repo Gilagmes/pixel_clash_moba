@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "scripts": {
-    "start": "node formation-ai.js"
+    "start": "node macro-ai.js"
   },
   "dependencies": {
     "express": "^5.1.0",
