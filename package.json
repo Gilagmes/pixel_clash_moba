@@ -1,9 +1,9 @@
 {
   "name": "pixel-clash-moba",
-  "version": "2.0.5",
+  "version": "2.0.6",
   "private": true,
   "scripts": {
-    "start": "node respawn-runtime.js"
+    "start": "node skill-shop-runtime.js"
   },
   "dependencies": {
     "express": "^5.1.0",
