@@ -20,4 +20,19 @@ code=code.replace('function applyDamage(r,t,d,a){let amount=d;', 'function apply
 code=code.replace('if(p.alive&&p.team!==a.team&&dist(a,p)<=range&&dist(a,p)<best)', 'if(p.alive&&p.team!==a.team&&!(p.statuses&&p.statuses.stealthUntil>Date.now())&&dist(a,p)<=range&&dist(a,p)<best)');
 code=code.replace('if(p.alive&&p.team!==s.team&&dist(s,p)<=range&&Math.abs(s.y-p.y)<48&&dist(s,p)<best)', 'if(p.alive&&p.team!==s.team&&!(p.statuses&&p.statuses.stealthUntil>Date.now())&&dist(s,p)<=range&&Math.abs(s.y-p.y)<48&&dist(s,p)<best)');
 code=code.replace('version:"3.4.0"','version:"3.5.0"');
+const botTarget=path.join(__dirname,'bots.js');
+const originalJs=Module._extensions['.js'];
+Module._extensions['.js']=function(mod,filename){if(path.resolve(filename)!==path.resolve(botTarget))return originalJs(mod,filename);let botCode=fs.readFileSync(filename,'utf8');const botInject=`
+function botStatusEnsure(p){if(!p)return null;p.statuses=p.statuses||{stunUntil:0,slowUntil:0,slowFactor:1,stealthUntil:0,shield:0,shieldUntil:0};const n=Date.now();if(p.statuses.stunUntil<=n)p.statuses.stunUntil=0;if(p.statuses.slowUntil<=n){p.statuses.slowUntil=0;p.statuses.slowFactor=1}if(p.statuses.stealthUntil<=n)p.statuses.stealthUntil=0;if(p.statuses.shieldUntil&&p.statuses.shieldUntil<=n){p.statuses.shield=0;p.statuses.shieldUntil=0}return p.statuses}
+function botCanAct(p){const s=botStatusEnsure(p);return !(s&&s.stunUntil>Date.now())}
+function botStatus(p,type,ms,value){const s=botStatusEnsure(p),u=Date.now()+ms;if(type==='stun')s.stunUntil=Math.max(s.stunUntil||0,u);if(type==='slow'){s.slowUntil=Math.max(s.slowUntil||0,u);s.slowFactor=Math.min(s.slowFactor||1,value||.5)}if(type==='stealth')s.stealthUntil=Math.max(s.stealthUntil||0,u);if(type==='shield'){s.shield=Math.max(s.shield||0,Math.round(value||0));s.shieldUntil=u}}
+`;
+botCode=botCode.replace('const LANES=',botInject+'const LANES=');
+botCode=botCode.replace('isBot:true,', 'statuses:{stunUntil:0,slowUntil:0,slowFactor:1,stealthUntil:0,shield:0,shieldUntil:0},isBot:true,');
+botCode=botCode.replace('if(!b.alive){', 'botStatusEnsure(b);if(b.level>=3&&!b.specialization){b.specialization=b.hero===\"warrior\"?(b.level%2?\"warrior-tank\":\"warrior-bruiser\"):b.hero===\"mage\"?(b.level%2?\"mage-burst\":\"mage-control\"):(b.level%2?\"assassin-crit\":\"assassin-execute\")}if(!botCanAct(b))continue;if(!b.alive){');
+botCode=botCode.replace('if(key==="e"){const dir=', 'if(key==="e"){if(b.hero==="assassin")botStatus(b,"stealth",700);const dir=');
+botCode=botCode.replace('return damage(room,b,target,value)}', 'const did=damage(room,b,target,value);if(b.hero==="warrior"&&key==="q")botStatus(target,"stun",850);if(b.hero==="warrior"&&key==="e")botStatus(target,"slow",1000,.55);if(b.hero==="warrior"&&key==="r"){botStatus(target,"stun",650);botStatus(target,"slow",1400,.45)}if(b.hero==="mage"&&key==="q")botStatus(target,"slow",1800,.5);if(b.hero==="mage"&&key==="r")botStatus(target,"slow",2500,.38);if(b.hero==="warrior"&&key==="w")botStatus(b,"shield",3500,45+b.maxHp*.12);if(b.hero==="assassin"&&key==="w")botStatus(b,"stealth",2800);return did}');
+botCode=botCode.replace('let final=roleDamage(a,t,amount);', 'botStatusEnsure(t);if(t.statuses&&t.statuses.shield>0){const absorbed=Math.min(t.statuses.shield,Math.max(0,amount));t.statuses.shield-=absorbed;amount-=absorbed;if(amount<=0)return false}let final=roleDamage(a,t,amount);');
+mod._compile(botCode,filename)};
 const mod=new Module(target,module.parent);mod.filename=target;mod.paths=Module._nodeModulePaths(__dirname);mod._compile(code,target);
+Module._extensions['.js']=originalJs;
