@@ -1,11 +1,21 @@
 (()=>{
   const NativeWS=window.WebSocket;
   window.__pixelJungle=[];
+  const wrap=document.querySelector('.game-wrap');
+  let hud=null,feed=null;
+  function ensureHud(){
+    if(!wrap||hud)return;
+    hud=document.createElement('div');hud.id='objectivesHud';hud.innerHTML='<div class="objective-card" data-o="blue"><strong>⚡ BLUE</strong><span>--</span></div><div class="objective-card" data-o="red"><strong>🔥 RED</strong><span>--</span></div><div class="objective-card" data-o="boss"><strong>🐉 DRAGON</strong><span>--</span></div>';wrap.appendChild(hud);
+    feed=document.createElement('div');feed.id='objectiveFeed';wrap.appendChild(feed);
+  }
+  function fmt(ms){if(ms<=0)return'ГОТОВ';const s=Math.ceil(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
+  function renderObjectives(){ensureHud();if(!hud)return;const now=Date.now();for(const j of window.__pixelJungle){const card=hud.querySelector('[data-o="'+j.type+'"]');if(!card)continue;const span=card.querySelector('span');span.textContent=j.alive?'АКТИВЕН':fmt((j.respawnAt||0)-now);card.classList.toggle('ready',!j.alive&&((j.respawnAt||0)-now)<=0)}}
+  function objectiveEvent(m){ensureHud();if(!feed)return;const icon=m.buff==='dragon'?'🐉':m.buff==='red'?'🔥':'⚡';const e=document.createElement('div');e.className='objective-event';e.textContent=icon+' '+m.monster+' повержен! +'+m.reward+' 🪙';feed.appendChild(e);setTimeout(()=>e.remove(),3400)}
   window.WebSocket=class extends NativeWS{
     set onmessage(fn){
       this._pcOnMessage=fn;
       super.onmessage=e=>{
-        try{const m=JSON.parse(e.data);if(m.type==="state")window.__pixelJungle=Array.isArray(m.jungle)?m.jungle:[]}catch{}
+        try{const m=JSON.parse(e.data);if(m.type==="state")window.__pixelJungle=Array.isArray(m.jungle)?m.jungle:[];if(m.type==="jungleKill")objectiveEvent(m)}catch{}
         if(this._pcOnMessage)this._pcOnMessage(e);
       };
     }
@@ -24,6 +34,7 @@
       }
       x.restore();
     }
+    renderObjectives();
     requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);
