@@ -1,5 +1,8 @@
-// Stable bot runtime: keeps the existing AI, but adds a deterministic movement layer.
-const Module=require('module');
+const fs=require("fs");
+const path=require("path");
+const Module=require("module");
+
+// Load bots normally, then wrap their tick with a deterministic motion safety layer.
 const originalLoad=Module._load;
 Module._load=function(request,parent,isMain){
   const loaded=originalLoad.apply(this,arguments);
@@ -29,4 +32,22 @@ Module._load=function(request,parent,isMain){
   }
   return loaded;
 };
-require('./server.js');
+
+// Patch the WebSocket broadcast bug before compiling server.js.
+// The old implementation looked for a non-existent room._clients map, so
+// players never received state and the arena appeared empty.
+const target=path.join(__dirname,"server.js");
+let source=fs.readFileSync(target,"utf8");
+const broken='function broadcast(r,msg){for(const p of r.players){const c=r._clients?.get(p.id);if(c&&c.readyState===1)c.send(JSON.stringify(msg))}}';
+const fixed='function broadcast(r,msg){for(const c of wss.clients){if(c.readyState!==1||c.roomId!==r.id)continue;c.send(JSON.stringify(msg))}}';
+if(source.includes(broken)){
+  source=source.replace(broken,fixed);
+  console.log("[PixelClash runtime] WebSocket broadcast patch active");
+}else{
+  console.log("[PixelClash runtime] broadcast patch not needed or signature changed");
+}
+
+const mod=new Module(target,module);
+mod.filename=target;
+mod.paths=Module._nodeModulePaths(__dirname);
+mod._compile(source,target);
