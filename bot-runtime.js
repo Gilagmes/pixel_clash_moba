@@ -49,14 +49,14 @@ if(source.includes(broken)){
   console.log("[PixelClash runtime] broadcast patch not needed or signature changed");
 }
 
-// Arena visibility safety layer. It runs inside server.js scope, so it can
-// access the live rooms map and always keep bots/minions/state visible.
+// Arena visibility + movement safety layer. It runs inside server.js scope,
+// so it can access the live rooms map and keep bots/minions/state visible.
 source += `
 
-// PIXEL CLASH ARENA SAFETY: guaranteed bots, minion waves and state snapshots.
+// PIXEL CLASH ARENA SAFETY: guaranteed bots, minion waves and visible motion.
 (function pixelArenaSafety(){
   const MINION_WAVE_MS=7000;
-  const STATE_MS=500;
+  const STATE_MS=250;
   function spawnFallbackWave(room,now){
     if(!room||room.finished||!Array.isArray(room.minions))return;
     const alive=room.minions.filter(m=>m&&m.alive!==false&&Number(m.hp)>0).length;
@@ -88,16 +88,16 @@ source += `
         if(!room||room.finished)continue;
         if(!Array.isArray(room.minions))room.minions=[];
         if(!room.__pixelSafetyStarted)room.__pixelSafetyStarted=now;
-        // Give the normal bot system a second chance after the lobby settles.
         if(now-room.startedAt>3500 && typeof ensureBots==='function'){
           try{ensureBots(room)}catch(e){}
         }
         spawnFallbackWave(room,now);
-        // A lightweight fallback movement only for waves created here.
+        // Fallback waves advance at a clearly visible MOBA pace.
         for(const m of room.minions){
           if(!m||!m.__pixelFallback||m.alive===false||Number(m.hp)<=0)continue;
           const dir=m.team===1?1:-1;
-          m.x+=dir*(Number(m.speed)||1.1)*0.45;
+          const speed=(Number(m.speed)||1.1)*2.8;
+          m.x+=dir*speed;
           m.x=Math.max(70,Math.min(930,m.x));
         }
         if(typeof broadcastState==='function')broadcastState(room);
