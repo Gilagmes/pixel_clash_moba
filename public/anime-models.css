@@ -1,0 +1,1 @@
+.anime-model-layer{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:35;image-rendering:auto}.character-visuals-layer{z-index:25!important}.anime-model-layer{filter:saturate(1.18) contrast(1.08)}@media(max-width:720px){.anime-model-layer{transform:translateZ(0)}}
