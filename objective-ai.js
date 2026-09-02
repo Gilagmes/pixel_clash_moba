@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-// Objective AI layer: augments the compressed bots.js at runtime.
+// Objective + teamfight AI layer: augments compressed bots.js at runtime.
 const originalRead = fs.readFileSync;
 const botsPath = path.resolve(__dirname, 'bots.js');
 fs.readFileSync = function(file, encoding) {
@@ -68,6 +68,12 @@ function pushLane(room,b){
   }
   return best;
 }
+function teamFightReady(room,b,target){
+  if(!target)return false;
+  const allies=room.players.filter(p=>p.alive&&p.team===b.team&&p.id!==b.id&&dist(p,target)<280).length;
+  const enemies=room.players.filter(p=>p.alive&&p.team!==b.team&&dist(p,target)<280).length;
+  return allies>=2&&allies>=enemies;
+}
 `;
   if (!code.includes('function objectiveCamp(')) code = code.replace('const LANES=', inject+'const LANES=');
 
@@ -81,19 +87,16 @@ function pushLane(room,b){
     'const wantsJungle=!!(camp&&now>=b.botJungleAt&&b.hp>b.maxHp*.58&&!objectiveContest&&(!target||(!danger&&camp.buff!=="blue")||camp.buff==="dragon"));'
   );
 
-  // Team push coordination: bots periodically converge on the same vulnerable lane.
   code = code.replace(
     'const lane=b.botLane||LANES[0],dir=b.team===1?1:-1;',
     'const coordinatedLane=pushLane(room,b);const lane=(now>=b.botLaneAt-1200&&room.players.filter(p=>p.alive&&p.team===b.team&&p.isBot&&Math.abs((p.botLane||LANES[0])-coordinatedLane)<1).length>=1)?coordinatedLane:(b.botLane||LANES[0]),dir=b.team===1?1:-1;'
   );
 
-  // If two or more allies are already near the selected lane, bots become more willing to push it.
   code = code.replace(
     'const grouped=allies.filter(a=>dist(a,b)<300).length>=1;',
     'const grouped=allies.filter(a=>dist(a,b)<300).length>=1;const pushGroup=room.players.filter(p=>p.alive&&p.team===b.team&&Math.abs(p.y-lane)<140).length>=2;'
   );
 
-  // Teamfight coordination: refresh a shared focus target and protect a wounded ally.
   code = code.replace(
     'const allies=room.players.filter(p=>p.alive&&p.team===b.team&&p.id!==b.id);',
     'const allies=room.players.filter(p=>p.alive&&p.team===b.team&&p.id!==b.id);const fightTarget=teamFightFocus(room,b,enemies);if(fightTarget)b.botFocusId=fightTarget.id;'
@@ -104,7 +107,25 @@ function pushLane(room,b){
   );
   code = code.replace(
     'if(b.hero==="warrior"&&threat&&dist(b,threat)>150)target=threat;',
-    'if(b.hero==="warrior"&&threat&&dist(b,threat)>150)target=threat;const focusedTeam=enemies.find(e=>e.id===b.botFocusId&&e.alive);if(focusedTeam&&room.players.filter(p=>p.alive&&p.team===b.team&&dist(p,focusedTeam)<280).length>=2)target=focusedTeam;'
+    'if(b.hero==="warrior"&&threat&&dist(b,threat)>150)target=threat;const focusedTeam=enemies.find(e=>e.id===b.botFocusId&&e.alive);if(focusedTeam&&teamFightReady(room,b,focusedTeam))target=focusedTeam;'
+  );
+
+  // Teamfight positioning: Warrior fronts, Mage keeps a backline distance, Assassin flanks.
+  code = code.replace(
+    'const nearbyAllies=allies.filter(a=>dist(a,target)<230).length;\n  const range=b.hero==="mage"?210:b.hero==="assassin"?155:150;',
+    'const nearbyAllies=allies.filter(a=>dist(a,target)<230).length;\n  const teamReady=teamFightReady(room,b,target);\n  const range=b.hero==="mage"?210:b.hero==="assassin"?155:150;'
+  );
+  code = code.replace(
+    'if(b.hero==="warrior"){',
+    'if(b.hero==="warrior"){\n    if(teamReady&&dist(b,target)>125){b.x+=(target.x-b.x)*.07;b.y+=(target.y-b.y)*.055}'
+  );
+  code = code.replace(
+    '}else if(b.hero==="mage"){',
+    '}else if(b.hero==="mage"){\n    if(teamReady&&dist(b,target)<175){b.x-=(target.x-b.x)*.045;b.y+=(b.y-target.y)*.035}'
+  );
+  code = code.replace(
+    '}else if(b.hero==="assassin"&&dist(b,target)<320){const flank=b.team===1?-1:1;',
+    '}else if(b.hero==="assassin"&&dist(b,target)<360){const flank=b.team===1?-1:1;'
   );
 
   return code;
