@@ -1,89 +1,81 @@
-/* Pixel Clash — authoritative movement controller. Loaded before game.js. */
+/* Pixel Clash — single authoritative movement input. Loaded before game.js. */
 (()=>{
   const NativeWS=window.WebSocket;
-  let activeWS=null;
-  let self=null;
   const held=new Set();
   const DIR={up:[0,-48],down:[0,48],left:[-48,0],right:[48,0]};
+  let socket=null;
+  let selfId=null;
+  let selfPos=null;
 
-  function trackSocket(sock){
-    activeWS=sock;
+  function rememberState(data){
     try{
-      const oldMessage=sock.onmessage;
-      sock.addEventListener('message',ev=>{
-        try{
-          const m=JSON.parse(ev.data);
-          if(m?.type==='state'&&Array.isArray(m.players)){
-            const found=self?.id?m.players.find(p=>p.id===self.id):null;
-            self=found||self||m.players.find(p=>!p.isBot)||null;
-          }
-        }catch{}
-      });
+      const m=JSON.parse(data);
+      if(m?.type!=="state"||!Array.isArray(m.players))return;
+      let me=selfId?m.players.find(p=>p.id===selfId):null;
+      if(!me)me=m.players.find(p=>p.isBot===false)||null;
+      if(me){selfId=me.id;selfPos={x:Number(me.x),y:Number(me.y),alive:me.alive!==false};}
     }catch{}
   }
 
-  function PixelWebSocket(...args){
-    const sock=new NativeWS(...args);
-    trackSocket(sock);
-    sock.addEventListener('close',()=>{if(activeWS===sock){activeWS=null;self=null}});
-    return sock;
+  function HookedWebSocket(...args){
+    const ws=new NativeWS(...args);
+    socket=ws;
+    ws.addEventListener("message",e=>rememberState(e.data));
+    ws.addEventListener("close",()=>{if(socket===ws){socket=null;selfId=null;selfPos=null;held.clear();}});
+    return ws;
   }
-  PixelWebSocket.prototype=NativeWS.prototype;
-  for(const k of ['CONNECTING','OPEN','CLOSING','CLOSED'])PixelWebSocket[k]=NativeWS[k];
-  window.WebSocket=PixelWebSocket;
+  HookedWebSocket.prototype=NativeWS.prototype;
+  for(const k of ["CONNECTING","OPEN","CLOSING","CLOSED"])HookedWebSocket[k]=NativeWS[k];
+  window.WebSocket=HookedWebSocket;
 
-  function sendMove(dx,dy){
-    const ws=activeWS;
-    if(!ws||ws.readyState!==NativeWS.OPEN||!self||self.alive===false)return;
-    const x=Number(self.x),y=Number(self.y);
-    if(!Number.isFinite(x)||!Number.isFinite(y))return;
-    try{ws.send(JSON.stringify({type:'move',x:x+dx,y:y+dy}))}catch{}
+  function send(dx,dy){
+    const ws=socket,p=selfPos;
+    if(!ws||ws.readyState!==NativeWS.OPEN||!p||p.alive===false)return;
+    if(!Number.isFinite(p.x)||!Number.isFinite(p.y))return;
+    const x=p.x+dx,y=p.y+dy;
+    try{
+      ws.send(JSON.stringify({type:"move",x,y}));
+      selfPos={...p,x,y};
+    }catch{}
   }
 
-  function stop(e){
-    const b=e.currentTarget;
+  function movementButton(e,down){
+    const b=e.target?.closest?.("[data-key]");
     const key=b?.dataset?.key;
-    if(key)held.delete(key);
+    if(!key||!DIR[key])return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if(down){held.add(key);try{b.setPointerCapture?.(e.pointerId)}catch{};send(...DIR[key]);}
+    else held.delete(key);
   }
-  document.addEventListener('pointerdown',e=>{
-    const b=e.target?.closest?.('[data-key]');
-    if(!b)return;
-    const key=b.dataset.key;
-    if(!DIR[key])return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    held.add(key);
-    try{b.setPointerCapture?.(e.pointerId)}catch{}
-    sendMove(...DIR[key]);
-  },true);
-  for(const type of ['pointerup','pointercancel','lostpointercapture'])document.addEventListener(type,e=>{
-    const b=e.target?.closest?.('[data-key]');
-    if(b?.dataset?.key)held.delete(b.dataset.key);
-  },true);
 
-  const keyMap={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',w:'up',s:'down',a:'left',d:'right'};
-  document.addEventListener('keydown',e=>{
-    const key=keyMap[e.key]||keyMap[e.key.toLowerCase()];
-    if(!key)return;
+  document.addEventListener("pointerdown",e=>movementButton(e,true),true);
+  document.addEventListener("pointerup",e=>movementButton(e,false),true);
+  document.addEventListener("pointercancel",e=>movementButton(e,false),true);
+  document.addEventListener("lostpointercapture",e=>movementButton(e,false),true);
+
+  const keys={ArrowUp:"up",ArrowDown:"down",ArrowLeft:"left",ArrowRight:"right",w:"up",s:"down",a:"left",d:"right"};
+  document.addEventListener("keydown",e=>{
+    const k=keys[e.key]||keys[e.key?.toLowerCase()];
+    if(!k)return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    held.add(key);
+    held.add(k);
   },true);
-  document.addEventListener('keyup',e=>{
-    const key=keyMap[e.key]||keyMap[e.key.toLowerCase()];
-    if(key)held.delete(key);
+  document.addEventListener("keyup",e=>{
+    const k=keys[e.key]||keys[e.key?.toLowerCase()];
+    if(k)held.delete(k);
   },true);
-  window.addEventListener('blur',()=>held.clear());
-  document.addEventListener('visibilitychange',()=>{if(document.hidden)held.clear()});
+  window.addEventListener("blur",()=>held.clear());
+  document.addEventListener("visibilitychange",()=>{if(document.hidden)held.clear();});
 
   setInterval(()=>{
-    if(document.getElementById('game')?.classList.contains('hidden'))return;
-    if(!held.size)return;
+    if(document.getElementById("game")?.classList.contains("hidden")||!held.size)return;
     let dx=0,dy=0;
-    for(const key of held){dx+=DIR[key][0];dy+=DIR[key][1]}
-    if(dx||dy){const len=Math.hypot(dx,dy)||1;sendMove(dx/len*48,dy/len*48)}
-  },100);
+    for(const k of held){dx+=DIR[k][0];dy+=DIR[k][1];}
+    if(dx||dy){const n=Math.hypot(dx,dy)||1;send(dx/n*48,dy/n*48);}
+  },90);
 
   window.__pixelMovementFix=true;
-  window.__pixelMovementFixV3=true;
+  window.__pixelMovementFixV4=true;
 })();
