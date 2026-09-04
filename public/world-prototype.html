@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Pixel Clash — Living World</title>
+<style>
+:root{--glass:rgba(12,17,25,.78);--line:rgba(255,255,255,.12);--text:#f4f7fb;--muted:#9ca9b8;--accent:#78d7ff;--danger:#ff5b6e;--good:#75e39a}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#071017;color:var(--text);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;touch-action:none}
+#scene{position:fixed;inset:0}canvas{display:block}
+.hud{position:fixed;inset:0;pointer-events:none;padding:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom));display:flex;flex-direction:column;justify-content:space-between}
+.top{display:flex;gap:10px;align-items:flex-start}.brand,.panel,.objective,.nav{background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(12px);box-shadow:0 10px 30px #0005;border-radius:16px}.brand{padding:11px 14px;min-width:155px}.brand b{font-size:14px;letter-spacing:.12em}.brand small{display:block;color:var(--muted);margin-top:3px}.resources{display:flex;gap:7px;flex-wrap:wrap}.resource{padding:8px 10px;border-radius:12px;background:#0b121bcc;border:1px solid var(--line);font-weight:700;font-size:13px}.objective{margin:auto auto 10px;padding:10px 13px;align-self:center;font-size:13px}.objective b{color:var(--good)}
+.bottom{display:flex;align-items:end;justify-content:space-between;gap:10px}.panel{pointer-events:auto;padding:10px}.hero{display:flex;align-items:center;gap:10px;min-width:205px}.portrait{width:44px;height:44px;border-radius:12px;background:linear-gradient(145deg,#27384b,#0e1824);display:grid;place-items:center;font-size:25px;border:1px solid #ffffff18}.hero b{display:block;font-size:13px}.hero small{display:block;color:var(--muted);margin-top:2px}.bar{height:6px;width:145px;background:#111a23;border-radius:8px;overflow:hidden;margin-top:6px}.hp{height:100%;width:82%;background:#65e59a}.xp{height:100%;width:36%;background:#6fcfff}.actions{display:flex;gap:8px}.action{width:52px;height:52px;border:1px solid var(--line);border-radius:15px;background:var(--glass);color:#fff;font-weight:900;font-size:18px;box-shadow:0 8px 20px #0005}.action:active{transform:scale(.94)}.nav{pointer-events:auto;display:flex;gap:5px;padding:6px}.nav button{border:0;background:transparent;color:#aeb9c6;border-radius:12px;padding:9px 11px;font-size:11px;font-weight:800}.nav button.active{background:#ffffff12;color:#fff}
+.legend{position:fixed;top:72px;right:12px;background:var(--glass);border:1px solid var(--line);border-radius:14px;padding:9px 11px;font-size:11px;color:#c4ced8;line-height:1.6;pointer-events:none}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}.blue{background:#63c9ff}.green{background:#72df91}.red{background:#ff6577}.gold{background:#f2c45c}
+@media(max-width:650px){.resources{max-width:210px}.legend{display:none}.objective{font-size:12px;margin-bottom:8px}.hero{min-width:185px}.nav button{padding:8px 8px}.action{width:48px;height:48px}}
+</style>
+</head>
+<body>
+<div id="scene"></div>
+<div class="legend"><span class="dot blue"></span>база&nbsp;&nbsp;<span class="dot green"></span>работники<br><span class="dot gold"></span>армия&nbsp;&nbsp;<span class="dot red"></span>зомби</div>
+<div class="hud">
+  <div class="top"><div class="brand"><b>PIXEL CLASH</b><small>ЖИВОЙ МИР · РАЙОН 01</small></div><div class="resources"><div class="resource">🪵 1,240</div><div class="resource">🥫 680</div><div class="resource">🔩 315</div><div class="resource">⛽ 94</div></div></div>
+  <div class="objective">РАЗВЕДКА: <b>ЗАПАДНЫЙ ЛЕС</b> · угроза 2/5 · 1.8 км</div>
+  <div class="bottom"><div class="panel hero"><div class="portrait">🧭</div><div><b>Капитан Алекс · ур. 7</b><small>Командир разведчиков</small><div class="bar"><div class="hp"></div></div><div class="bar"><div class="xp"></div></div></div></div><div class="actions"><button class="action" title="Карта">🗺️</button><button class="action" title="Рейд">⚔️</button><button class="action" title="База">🏠</button></div><div class="nav"><button class="active">МИР</button><button>БАЗА</button><button>ГЕРОИ</button><button>АРМИЯ</button></div></div>
+</div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js';
+import {OrbitControls} from 'https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/controls/OrbitControls.js';
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x081118);scene.fog=new THREE.Fog(0x081118,55,145);
+const camera=new THREE.PerspectiveCamera(46,innerWidth/innerHeight,.1,220);camera.position.set(34,31,38);
+const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;document.getElementById('scene').appendChild(renderer.domElement);
+const controls=new OrbitControls(camera,renderer.domElement);controls.target.set(0,0,0);controls.enableDamping=true;controls.dampingFactor=.07;controls.minDistance=24;controls.maxDistance=70;controls.maxPolarAngle=Math.PI*.46;controls.minPolarAngle=.52;controls.enablePan=true;controls.panSpeed=.7;
+scene.add(new THREE.HemisphereLight(0x9fd7ff,0x26351f,2.3));const sun=new THREE.DirectionalLight(0xffe4b3,3.2);sun.position.set(25,45,18);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);scene.add(sun);
+const world=new THREE.Group();scene.add(world);
+const mat=(c,rough=1)=>new THREE.MeshStandardMaterial({color:c,roughness:rough});
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(150,150),mat(0x253b2b));ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;world.add(ground);
+function box(x,y,z,sx,sy,sz,c){const m=new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz),mat(c));m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;world.add(m);return m}
+function road(x,z,w,d){const r=box(x,.035,z,w,.07,d,0x4a4a45);for(let i=-Math.floor(d/4);i<Math.floor(d/4);i++)box(x,.075,z+i*4,.25,.025,1.8,0xc5ad6d)}
+road(0,0,9,120);road(-22,7,5,55);road(20,-8,5,48);road(0,18,45,5);
+// base compound
+box(0,.15,17,27,.3,22,0x1b2c25);box(-2,2,17,10,3.8,7,0x6c7a72);box(-2,4.5,17,6,1.2,6,0x34464b);box(-2,7,17,3.8,4,3.8,0x54727a);box(-2,9.4,17,2.2,1.2,2.2,0x8ba9ad);
+// warehouse, workshop, farm, watchtower
+box(8,1.6,22,7,3.2,6,0x705743);box(8,3.8,22,7.4,.35,6.4,0x3b3029);box(-10,1.3,22,6,2.6,5,0x5d4a39);box(10,2.2,12,4.5,4.4,4.5,0x3b5660);box(10,4.8,12,2.8,.5,2.8,0x8095a0);
+for(let i=0;i<5;i++){const x=-10+i*3.8;box(x,.28,13,.8,.45,5.8,0x3d6a3f);for(let j=0;j<4;j++){const plant=new THREE.Mesh(new THREE.ConeGeometry(.18,.7,5),mat(0x78b54e));plant.position.set(x+(Math.random()-.5)*.35,.75,11.1+j*.75);plant.castShadow=true;world.add(plant)}}
+// fences and lights
+for(let i=-13;i<=13;i+=2)box(i,.65,6,.12,1.3,.12,0x87918a);for(let i=-13;i<=13;i+=2)box(i,.72,28,.12,1.45,.12,0x87918a);for(const x of [-12,12]){const pole=box(x,2.5,7,.16,5,.16,0x39434a);const bulb=new THREE.Mesh(new THREE.SphereGeometry(.35,12,8),new THREE.MeshStandardMaterial({color:0xffd98a,emissive:0xffa84d,emissiveIntensity:2}));bulb.position.set(x,5,7);world.add(bulb)}
+// trees
+function tree(x,z,scale=1){const g=new THREE.Group();const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.28*scale,.38*scale,2.4*scale,7),mat(0x58412f));trunk.position.y=1.2*scale;g.add(trunk);for(let i=0;i<3;i++){const crown=new THREE.Mesh(new THREE.ConeGeometry((1.7-i*.25)*scale,3.2*scale,7),mat(i?0x2f653b:0x3e7a44));crown.position.y=(2.5+i*1.05)*scale;crown.castShadow=true;g.add(crown)}g.position.set(x,0,z);world.add(g)}
+for(let i=0;i<72;i++){const a=Math.random()*Math.PI*2,r=28+Math.random()*38,x=Math.cos(a)*r,z=Math.sin(a)*r;if(Math.abs(x)<15&&z>5)continue;tree(x,z,.75+Math.random()*.55)}
+// river
+const river=new THREE.Mesh(new THREE.PlaneGeometry(16,150),new THREE.MeshStandardMaterial({color:0x235b70,roughness:.25,metalness:.05}));river.rotation.x=-Math.PI/2;river.position.set(31,.02,0);world.add(river);for(let i=-55;i<55;i+=4)box(28,.09,i,4,.12,.35,0x356f7c);
+function human(x,z,color,kind='worker'){const g=new THREE.Group();const body=new THREE.Mesh(new THREE.CapsuleGeometry(.42,.95,5,8),mat(color));body.position.y=1.15;body.castShadow=true;g.add(body);const head=new THREE.Mesh(new THREE.SphereGeometry(.42,10,8),mat(0xd3a17b));head.position.y=2.05;head.castShadow=true;g.add(head);if(kind==='soldier'){const gun=box(0,0,0,.16,.16,1.5,0x1a2025);gun.position.set(.52,1.3,.15);gun.rotation.z=-.2;g.add(gun)}g.position.set(x,0,z);world.add(g);return g}
+const workers=[[-8,18],[3,22],[6,15],[-7,25],[1,12]];workers.forEach((p,i)=>human(p[0],p[1],0x65c88c));
+for(let i=0;i<6;i++){const a=-1.05+i*.28;human(14+i*.9,5+i*.5,0xd6b45d,'soldier')}
+// zombies at forest edge
+for(let i=0;i<9;i++){const a=Math.PI*.72+Math.random()*.65,r=30+Math.random()*14;human(Math.cos(a)*r,Math.sin(a)*r,0xb55b68,'zombie')}
+// loot/POI markers
+function marker(x,z,c,label){const ring=new THREE.Mesh(new THREE.TorusGeometry(1.2,.1,8,32),new THREE.MeshBasicMaterial({color:c}));ring.rotation.x=Math.PI/2;ring.position.set(x,.18,z);world.add(ring);const p=new THREE.Mesh(new THREE.ConeGeometry(.22,.7,6),new THREE.MeshBasicMaterial({color:c}));p.position.set(x,.7,z);world.add(p)}
+marker(-24,-24,0xffc857,'');marker(21,-29,0x6acbff,'');marker(40,17,0xff5d73,'');
+// subtle base beacon
+const beacon=new THREE.Mesh(new THREE.CylinderGeometry(.25,.25,7,12),new THREE.MeshBasicMaterial({color:0x6bd6ff,transparent:true,opacity:.35}));beacon.position.set(-2,5,17);world.add(beacon);
+// animated life
+const people=world.children.filter(o=>o.type==='Group'&&o.children.length>=2);let t=0;
+function animate(){requestAnimationFrame(animate);t+=.016;people.forEach((g,i)=>{const k=i%7;g.position.y=Math.sin(t*2+k)*.025;if(i<5){g.position.x+=Math.sin(t*.55+i)*.0015;g.position.z+=Math.cos(t*.7+i)*.0015}});beacon.material.opacity=.2+.12*Math.sin(t*2);controls.update();renderer.render(scene,camera)}animate();
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.6))});
+let sx=0,sy=0;renderer.domElement.addEventListener('touchstart',e=>{if(e.touches.length===1){sx=e.touches[0].clientX;sy=e.touches[0].clientY}},{passive:true});
+</script>
+</body>
+</html>
